@@ -1,0 +1,21 @@
+[project]
+name = "comfyui-relayapi"
+description = "ComfyUI custom nodes for AI video/image generation via API relay stations (supports Grok, Veo, Gemini)"
+version = "1.0.0"
+license = {file = "LICENSE"}
+# classifiers = [
+#     "Operating System :: OS Independent",
+# ]
+
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/flywhale-666/ComfyUI-relayapi"
+Documentation = "https://github.com/flywhale-666/ComfyUI-relayapi/blob/main/README.md"
+"Bug Tracker" = "https://github.com/flywhale-666/ComfyUI-relayapi/issues"
+
+[tool.comfy]
+PublisherId = "flywhale"
+DisplayName = "ComfyUI-RelayAPI"
+Icon = ""
+includes = []
