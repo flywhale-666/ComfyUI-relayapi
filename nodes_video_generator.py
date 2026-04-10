@@ -1,12 +1,12 @@
 import json
 import time
 import requests
-import comfy.utils
+import comfy.utils  # type: ignore[reportMissingImports]
 from io import BytesIO
-from comfy.comfy_types import IO
-from comfy_api.latest._input_impl.video_types import VideoFromFile
+from comfy.comfy_types import IO  # type: ignore[reportMissingImports]
+from comfy_api.latest._input_impl.video_types import VideoFromFile  # type: ignore[reportMissingImports]
 
-from comfy_execution.graph_utils import ExecutionBlocker
+from comfy_execution.graph_utils import ExecutionBlocker  # type: ignore[reportMissingImports]
 from .utils import tensor2pil
 from .config import get_config, get_current_base_url, API_PATHS
 
@@ -21,14 +21,12 @@ def _download_video_as_bytesio(url, timeout=120):
     return buf
 
 
-# ── Grok 平台参数 ──
 GROK_RATIOS = ["AUTO", "16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3"]
 GROK_SIZES = ["720P", "480P"]
 GROK_DURATIONS = ["6", "10"]
 
-# ── Veo 平台参数 ──
 VEO_RATIOS = ["16:9", "9:16"]
-VEO_SIZES = ["720P", "1080P"]
+VEO_SIZES = ["720P", "1080P", "4K"]
 VEO_DURATIONS = ["4", "6", "8"]
 VEO_ENHANCE = ["true", "false"]
 VEO_UPSAMPLE = ["true", "false"]
@@ -51,7 +49,7 @@ class RelayVideoGenerator:
             "optional": {
                 "info": ("STRING", {"default": "", "forceInput": True}),
                 "enhance_prompt": (VEO_ENHANCE, {"default": "true"}),
-                "enable_upsample": (VEO_UPSAMPLE, {"default": "false"}),
+                "enable_HD": (VEO_UPSAMPLE, {"default": "false"}),
                 "image1": ("IMAGE",),
                 "image2": ("IMAGE",),
                 "image3": ("IMAGE",),
@@ -72,7 +70,7 @@ class RelayVideoGenerator:
         self.timeout = 300
 
     def _err(self, msg):
-        full_msg = f"[RelayAPI] {msg}"
+        full_msg = "[RelayAPI] " + msg
         print(full_msg)
         raise RuntimeError(full_msg)
 
@@ -84,12 +82,12 @@ class RelayVideoGenerator:
     def _headers_json(self, api_key):
         return {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": "Bearer " + api_key,
         }
 
     def _headers_auth(self, api_key):
         return {
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": "Bearer " + api_key,
         }
 
     def _image_to_base64_uri(self, image_tensor):
@@ -99,12 +97,11 @@ class RelayVideoGenerator:
             buffered = BytesIO()
             pil_image.save(buffered, format="PNG")
             b64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
-            return f"data:image/png;base64,{b64}"
+            return "data:image/png;base64," + b64
         except Exception as e:
-            print(f"[RelayAPI] Error converting image to base64: {e}")
+            print("[RelayAPI] Error converting image to base64: " + str(e))
             return None
 
-    # ── 图片转 bytes（Veo 用 multipart）──
     def _image_to_bytes(self, image_tensor):
         try:
             pil_image = tensor2pil(image_tensor)[0]
@@ -112,15 +109,12 @@ class RelayVideoGenerator:
             pil_image.save(buffered, format="PNG")
             return buffered.getvalue()
         except Exception as e:
-            print(f"[RelayAPI] Error converting image: {e}")
+            print("[RelayAPI] Error converting image: " + str(e))
             return None
 
     def _get_paths(self, api_format):
         return API_PATHS.get(api_format, API_PATHS["video_v1"])
 
-    # ══════════════════════════════════════
-    #  Grok 流程
-    # ══════════════════════════════════════
     def _grok_create(self, base_url, api_key, model, prompt, ratio, size,
                      duration, images, seed, pbar, api_format="video_v1"):
         paths = self._get_paths(api_format)
@@ -146,7 +140,7 @@ class RelayVideoGenerator:
                 if uri:
                     b64_list.append(uri)
                 else:
-                    return self._err(f"Failed to convert image {i + 1}.")
+                    return self._err("Failed to convert image " + str(i + 1) + ".")
 
             if api_format == "video_v2":
                 payload["image"] = b64_list[0]
@@ -160,24 +154,23 @@ class RelayVideoGenerator:
                     payload["reference_images"] = [{"url": u} for u in b64_list]
 
         pbar.update_absolute(30)
-        url = f"{base_url}{paths['grok_create']}"
-        print(f"[RelayAPI] POST {url}")
+        url = base_url + paths['grok_create']
+        print("[RelayAPI] POST " + url)
         resp = requests.post(url, headers=self._headers_json(api_key),
                              json=payload, timeout=self.timeout)
-        print(f"[RelayAPI] -> {resp.status_code}")
+        print("[RelayAPI] -> " + str(resp.status_code))
         if resp.status_code != 200:
-            self._err(f"Grok create error: {resp.status_code} - {resp.text[:500]}")
+            self._err("Grok create error: " + str(resp.status_code) + " - " + resp.text[:500])
 
         result = resp.json()
         task_id = result.get("task_id") or result.get("id") or result.get("request_id")
         if not task_id:
-            self._err(f"No task ID returned: {json.dumps(result)[:300]}")
+            self._err("No task ID returned: " + json.dumps(result)[:300])
 
-        print(f"[RelayAPI] Task: {task_id}")
+        print("[RelayAPI] Task: " + task_id)
         return task_id
 
     def _extract_video_url(self, data):
-        """从各种可能的响应结构中提取视频 URL"""
         _is_url = lambda v: isinstance(v, str) and v.startswith("http")
 
         for key in ("video_url", "url", "download_url", "output_url", "output"):
@@ -208,7 +201,7 @@ class RelayVideoGenerator:
 
     def _grok_query(self, base_url, api_key, task_id, api_format="video_v1"):
         paths = self._get_paths(api_format)
-        url = f"{base_url}{paths['grok_query'].format(task_id=task_id)}"
+        url = base_url + paths['grok_query'].format(task_id=task_id)
         resp = requests.get(url, headers=self._headers_json(api_key), timeout=30)
         if resp.status_code != 200:
             return None, None, None
@@ -217,84 +210,86 @@ class RelayVideoGenerator:
         video_url = self._extract_video_url(data)
         return status, video_url, data
 
-    # ══════════════════════════════════════
-    #  Veo 流程
-    # ══════════════════════════════════════
     def _veo_actual_size(self, size, ratio):
+        if size == "4K":
+            return "4K"
         vertical = ratio == "9:16"
         if size == "1080P":
             return "1080x1920" if vertical else "1920x1080"
         return "720x1280" if vertical else "1280x720"
 
     def _veo_create(self, base_url, api_key, model, prompt, ratio, size,
-                    enhance_prompt, enable_upsample, images, pbar, api_format="video_v1"):
-        import io as _io
+                    enhance_prompt, enable_HD, images, pbar, api_format="video_v1"):
         paths = self._get_paths(api_format)
 
-        actual_size = self._veo_actual_size(size, ratio)
+        model_has_4k = model and "4k" in model.lower()
+
+        if model_has_4k:
+            actual_size = None
+        elif size == "4K":
+            actual_size = "4K"
+        else:
+            actual_size = self._veo_actual_size(size, ratio)
 
         _to_bool = lambda s: s.lower() == "true" if isinstance(s, str) else bool(s)
 
-        base_data = {
+        payload = {
             "model": model or "veo_3_1-fast",
             "prompt": prompt,
-            "size": actual_size,
             "aspect_ratio": ratio,
             "ratio": ratio,
             "enhance_prompt": _to_bool(enhance_prompt),
-            "enable_upsample": _to_bool(enable_upsample),
+            "enable_upsample": _to_bool(enable_HD),
         }
+        if actual_size is not None:
+            payload["size"] = actual_size
 
-        files_list = []
-        for i, img in enumerate(images):
-            if img is not None:
+        if images:
+            b64_list = []
+            for i, img in enumerate(images):
                 pbar.update_absolute(15 + i * 3)
-                img_bytes = self._image_to_bytes(img)
-                if img_bytes:
-                    files_list.append(("input_reference[]", (f"image_{i+1}.png", _io.BytesIO(img_bytes), "image/png")))
+                uri = self._image_to_base64_uri(img)
+                if uri:
+                    b64_list.append(uri)
                 else:
-                    return self._err(f"Failed to convert image {i + 1}.")
+                    return self._err("Failed to convert image " + str(i + 1) + ".")
+            payload["images"] = b64_list
+            if len(b64_list) == 1:
+                payload["image"] = {"url": b64_list[0]}
+            else:
+                payload["reference_images"] = [{"url": u} for u in b64_list]
 
         pbar.update_absolute(30)
 
-        url = f"{base_url}{paths['veo_create']}"
-        print(f"[RelayAPI] POST {url} (Veo, {len(files_list)} images)")
-        if files_list:
-            form_data = {k: str(v).lower() if isinstance(v, bool) else v for k, v in base_data.items()}
-            resp = requests.post(url, headers=self._headers_auth(api_key),
-                                 data=form_data, files=files_list, timeout=self.timeout)
-        else:
-            resp = requests.post(url, headers=self._headers_json(api_key),
-                                 json=base_data, timeout=self.timeout)
-        print(f"[RelayAPI] -> {resp.status_code}")
+        url = base_url + paths['veo_create']
+        print("[RelayAPI] POST " + url + " (Veo, " + str(len(images)) + " images, size=" + str(actual_size) + ")")
+        resp = requests.post(url, headers=self._headers_json(api_key),
+                             json=payload, timeout=self.timeout)
+        print("[RelayAPI] -> " + str(resp.status_code))
         if resp.status_code != 200:
-            self._err(f"Veo create error: {resp.status_code} - {resp.text[:500]}")
+            self._err("Veo create error: " + str(resp.status_code) + " - " + resp.text[:500])
 
         result = resp.json()
         task_id = result.get("task_id") or result.get("id") or result.get("request_id")
         if not task_id:
-            self._err(f"No task ID returned: {json.dumps(result)[:300]}")
+            self._err("No task ID returned: " + json.dumps(result)[:300])
 
-        print(f"[RelayAPI] Veo task: {task_id}")
+        print("[RelayAPI] Veo task: " + task_id)
         return task_id
 
     def _veo_query(self, base_url, api_key, task_id, api_format="video_v1"):
         paths = self._get_paths(api_format)
-        url = f"{base_url}{paths['veo_query'].format(task_id=task_id)}"
+        url = base_url + paths['veo_query'].format(task_id=task_id)
         resp = requests.get(url,
-                            headers={"Accept": "application/json", "Authorization": f"Bearer {api_key}"},
+                            headers={"Accept": "application/json", "Authorization": "Bearer " + api_key},
                             timeout=30)
         if resp.status_code != 200:
             return None, None, None
         data = resp.json()
         status = data.get("status", "unknown")
         video_url = self._extract_video_url(data)
-        print(f"[RelayAPI] Veo query: status={status}, has_url={bool(video_url)}")
         return status, video_url, data
 
-    # ══════════════════════════════════════
-    #  通用轮询
-    # ══════════════════════════════════════
     def _poll(self, query_fn, base_url, api_key, task_id, pbar):
         max_wait = 600
         start = time.time()
@@ -302,7 +297,7 @@ class RelayVideoGenerator:
         for attempt in range(200):
             elapsed = time.time() - start
             if elapsed > max_wait:
-                return self._err(f"Timeout after {elapsed:.1f}s")
+                return self._err("Timeout after " + str(round(elapsed, 1)) + "s")
 
             time.sleep(5)
 
@@ -329,7 +324,7 @@ class RelayVideoGenerator:
                 if any(k in status_lower for k in ("success", "completed", "done", "succeed")):
                     if video_url:
                         return video_url
-                    print(f"[RelayAPI] Task done but no video URL found in response: {json.dumps(data)[:500]}")
+                    print("[RelayAPI] Task done but no video URL found: " + json.dumps(data)[:500])
                     continue
 
                 if any(k in status_lower for k in ("fail", "error")):
@@ -339,7 +334,7 @@ class RelayVideoGenerator:
                                   or data.get("last_error")
                                   or (data.get("error") or {}).get("message", "")
                                   or "")
-                    self._err(f"Task failed: {reason or status}")
+                    self._err("Task failed: " + (reason or status))
 
             except requests.exceptions.Timeout:
                 continue
@@ -348,14 +343,11 @@ class RelayVideoGenerator:
             except Exception:
                 continue
 
-        return self._err(f"No result after {time.time() - start:.1f}s")
+        return self._err("No result after " + str(round(time.time() - start, 1)) + "s")
 
-    # ══════════════════════════════════════
-    #  主入口
-    # ══════════════════════════════════════
     def generate_video(self, prompt, ratio, size, duration,
                        info="",
-                       enhance_prompt="true", enable_upsample="false",
+                       enhance_prompt="true", enable_HD="false",
                        image1=None, image2=None, image3=None,
                        image4=None, image5=None, image6=None, image7=None, seed=0):
         parsed = {}
@@ -376,7 +368,7 @@ class RelayVideoGenerator:
             platform = (parsed.get("platform") or "Grok").strip()
             model = parsed.get("model", "")
             api_format = parsed.get("api_format", "video_v1")
-            print(f"[RelayAPI] {platform} | {api_format} | {base_url} | {model}")
+            print("[RelayAPI] " + platform + " | " + api_format + " | " + base_url + " | " + model)
             images = [img for img in [image1, image2, image3, image4, image5, image6, image7] if img is not None]
 
             pbar = comfy.utils.ProgressBar(100)
@@ -385,7 +377,7 @@ class RelayVideoGenerator:
             if platform == "Veo":
                 task_id = self._veo_create(
                     base_url, api_key, model, prompt, ratio, size,
-                    enhance_prompt, enable_upsample, images, pbar,
+                    enhance_prompt, enable_HD, images, pbar,
                     api_format=api_format,
                 )
                 query_fn = lambda bu, ak, tid: self._veo_query(bu, ak, tid, api_format=api_format)
@@ -401,12 +393,12 @@ class RelayVideoGenerator:
 
             video_url = self._poll(query_fn, base_url, api_key, task_id, pbar)
             pbar.update_absolute(90)
-            print(f"[RelayAPI] Downloading video: {video_url}")
+            print("[RelayAPI] Downloading video: " + video_url)
 
             video_buf = _download_video_as_bytesio(video_url)
             video_obj = VideoFromFile(video_buf)
             pbar.update_absolute(100)
-            print(f"[RelayAPI] Video ready")
+            print("[RelayAPI] Video ready")
 
             return (video_obj, task_id, json.dumps({"code": "success", "url": video_url}), video_url)
 

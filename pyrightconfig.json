@@ -1,0 +1,8 @@
+{
+  "extraPaths": [
+    "h:/ComfyUI-CS/ComfyUI"
+  ],
+  "reportMissingImports": false,
+  "reportMissingModuleSource": false,
+  "reportArgumentType": false
+}

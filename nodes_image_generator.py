@@ -1,11 +1,11 @@
 import json
 import base64
 import requests
-import comfy.utils
+import comfy.utils  # type: ignore[reportMissingImports]
 from io import BytesIO
 from PIL import Image
 
-from comfy_execution.graph_utils import ExecutionBlocker
+from comfy_execution.graph_utils import ExecutionBlocker  # type: ignore[reportMissingImports]
 from .utils import tensor2pil, pil2tensor
 from .config import get_config, get_current_base_url, API_PATHS
 
