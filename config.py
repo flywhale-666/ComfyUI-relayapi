@@ -13,8 +13,8 @@ TASK_TYPES = ["video", "image", "sound", "other"]
 
 DEFAULT_MODELS = {
     # video
-    "Grok": ["grok-video-3", "grok-video-3-10s"],
-    "Veo": ["veo_3_1-fast", "veo_3_1", "veo3.1-fast", "veo3.1", "veo3.1-pro"],
+    "Grok": ["grok-video-3"],
+    "Veo": ["veo3.1-fast", "veo3.1", "veo_3_1-lite", "veo_3_1-lite-4K"],
     # image — 通用 fallback
     "banana-pro": ["nano-banana-pro"],
     "banana-2": ["gemini-3.1-flash-image-preview"],

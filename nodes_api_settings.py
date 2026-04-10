@@ -8,7 +8,7 @@ from .config import (
 
 
 def _all_models():
-    """收集所有平台、所有 format 的模型合集，用于 ComfyUI 验证"""
+    """收集所有平台、所有 format 的模型合集（含用户自定义），用于 ComfyUI 验证"""
     seen = []
     for plat in PLATFORMS:
         for m in DEFAULT_MODELS.get(plat, []):
@@ -19,6 +19,13 @@ def _all_models():
                 for m in fmt_models:
                     if m not in seen:
                         seen.append(m)
+    config = get_config()
+    custom_models = config.get('custom_models', {})
+    for plat_models in custom_models.values():
+        for m in plat_models:
+            m = m.strip()
+            if m and m not in seen:
+                seen.append(m)
     return seen if seen else [""]
 
 
@@ -52,6 +59,10 @@ class RelayAPISettings:
     RETURN_NAMES = ("info",)
     FUNCTION = "set_api"
     CATEGORY = "RelayAPI"
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, model=None, api_base=None, **kwargs):
+        return True
 
     @classmethod
     def IS_CHANGED(cls, **kwargs):
