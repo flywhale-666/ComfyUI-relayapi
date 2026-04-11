@@ -104,10 +104,7 @@ class RelayImageGenerator:
 
         pbar.update_absolute(40)
         print(f"[RelayAPI] POST {url} (Gemini native, {len(images)} images)")
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        }
+        headers = {"Authorization": f"Bearer {api_key}"}
         resp = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
         pbar.update_absolute(75)
         print(f"[RelayAPI] -> {resp.status_code}")
@@ -136,10 +133,7 @@ class RelayImageGenerator:
 
         pbar.update_absolute(40)
         print(f"[RelayAPI] POST {url} (OpenAI text2img)")
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        }
+        headers = {"Authorization": f"Bearer {api_key}"}
         resp = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
         pbar.update_absolute(75)
         print(f"[RelayAPI] -> {resp.status_code}")

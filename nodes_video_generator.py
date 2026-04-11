@@ -94,12 +94,6 @@ class RelayVideoGenerator:
             return api_key.strip()
         return get_config().get('api_key', '')
 
-    def _headers_json(self, api_key):
-        return {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer " + api_key,
-        }
-
     def _headers_auth(self, api_key):
         return {
             "Authorization": "Bearer " + api_key,
@@ -172,7 +166,7 @@ class RelayVideoGenerator:
         pbar.update_absolute(30)
         url = base_url + paths['grok_create']
         print("[RelayAPI] POST " + url)
-        resp = requests.post(url, headers=self._headers_json(api_key),
+        resp = requests.post(url, headers=self._headers_auth(api_key),
                              json=payload, timeout=self.timeout)
         print("[RelayAPI] -> " + str(resp.status_code))
         if resp.status_code != 200:
@@ -218,7 +212,7 @@ class RelayVideoGenerator:
     def _grok_query(self, base_url, api_key, task_id, api_format="native_style"):
         paths = self._get_paths(api_format)
         url = base_url + paths['grok_query'].format(task_id=task_id)
-        resp = requests.get(url, headers=self._headers_json(api_key), timeout=30)
+        resp = requests.get(url, headers=self._headers_auth(api_key), timeout=30)
         if resp.status_code != 200:
             return None, None, None
         data = resp.json()
@@ -279,7 +273,7 @@ class RelayVideoGenerator:
 
         url = base_url + paths['veo_create']
         print("[RelayAPI] POST " + url + " (Veo, " + str(len(images)) + " images, size=" + str(actual_size) + ")")
-        resp = requests.post(url, headers=self._headers_json(api_key),
+        resp = requests.post(url, headers=self._headers_auth(api_key),
                              json=payload, timeout=self.timeout)
         print("[RelayAPI] -> " + str(resp.status_code))
         if resp.status_code != 200:
