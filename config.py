@@ -22,8 +22,8 @@ DEFAULT_MODELS = {
 
 FORMAT_MODELS = {
     "banana-pro": {
-        "image_v1": ["gemini-3-pro-image-preview"],
-        "image_v2": ["nano-banana-pro"],
+        "native_style": ["gemini-3-pro-image-preview"],
+        "openai_style": ["nano-banana-pro"],
     },
 }
 
@@ -36,36 +36,36 @@ TASK_PLATFORMS = {
 
 PLATFORMS = list(DEFAULT_MODELS.keys())
 
-VIDEO_API_FORMATS = ["video_v1", "video_v2"]
-IMAGE_API_FORMATS = ["image_v1", "image_v2"]
+VIDEO_API_FORMATS = ["native_style", "openai_style"]
+IMAGE_API_FORMATS = ["native_style", "openai_style"]
 
 API_FORMATS_BY_TASK = {
     "video": VIDEO_API_FORMATS,
     "image": IMAGE_API_FORMATS,
-    "sound": ["video_v1"],
-    "other": ["video_v1"],
+    "sound": ["native_style"],
+    "other": ["native_style"],
 }
 
 ALL_API_FORMATS = list(dict.fromkeys(VIDEO_API_FORMATS + IMAGE_API_FORMATS))
 
 API_PATHS = {
-    "video_v1": {
+    "video_native_style": {
         "grok_create": "/v1/video/create",
         "grok_query": "/v1/video/query?id={task_id}",
         "veo_create": "/v1/video/create",
         "veo_query": "/v1/video/query?id={task_id}",
     },
-    "video_v2": {
+    "video_openai_style": {
         "grok_create": "/v2/videos/generations",
         "grok_query": "/v2/videos/generations/{task_id}",
         "veo_create": "/v2/videos/generations",
         "veo_query": "/v2/videos/generations/{task_id}",
     },
-    "image_v1": {
+    "image_native_style": {
         "generate": "/v1beta/models/{model}:generateContent",
         "edit": "/v1beta/models/{model}:generateContent",
     },
-    "image_v2": {
+    "image_openai_style": {
         "generate": "/v1/images/generations",
         "edit": "/v1/images/edits",
     },

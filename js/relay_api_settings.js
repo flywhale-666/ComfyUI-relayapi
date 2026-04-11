@@ -9,10 +9,10 @@ const TASK_PLATFORMS = {
 };
 
 const TASK_API_FORMATS = {
-    video: ["video_v1", "video_v2"],
-    image: ["image_v1", "image_v2"],
-    sound: ["video_v1"],
-    other: ["video_v1"],
+    video: ["native_style", "openai_style"],
+    image: ["native_style", "openai_style"],
+    sound: ["native_style"],
+    other: ["native_style"],
 };
 
 app.registerExtension({
@@ -79,7 +79,7 @@ app.registerExtension({
 
         function applyTaskType(tt) {
             const platforms = TASK_PLATFORMS[tt] || [];
-            const formats = TASK_API_FORMATS[tt] || ["video_v1"];
+            const formats = TASK_API_FORMATS[tt] || ["native_style"];
 
             if (platform && platforms.length > 0) {
                 platform.options.values = platforms;

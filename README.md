@@ -38,7 +38,7 @@ pip install -r requirements.txt
 |------|------|
 | **task_type** | 任务类型：`video`、`image`、`sound`、`other` |
 | **platform** | 平台选择，跟随 task_type 自动切换。视频：`Grok` / `Veo`；图像：`banana-pro` / `banana-2` |
-| **api_format** | API 协议格式。视频：`video_v1` / `video_v2`；图像：`image_v1`（Gemini 原生）/ `image_v2`（OpenAI 兼容） |
+| **api_format** | API 协议格式：`native_style`（平台原生风格）/ `openai_style`（OpenAI 兼容风格） |
 | **api_base** | 中转站地址，支持下拉选择或通过 `custom_api_base` 手动添加 |
 | **model** | 模型名称，跟随平台和格式自动刷新，也可通过 `custom_model` 手动添加 |
 | **apikey** | API 密钥，输入后自动保存到本地配置文件，界面上以部分遮盖形式显示（前后各保留 6 位） |
@@ -99,9 +99,9 @@ pip install -r requirements.txt
 
 | 平台 | api_format | 模型 |
 |------|-----------|------|
-| banana-pro | image_v1 | gemini-3-pro-image-preview |
-| banana-pro | image_v2 | nano-banana-pro |
-| banana-2 | image_v1 / image_v2 | gemini-3.1-flash-image-preview |
+| banana-pro | native_style | gemini-3-pro-image-preview |
+| banana-pro | openai_style | nano-banana-pro |
+| banana-2 | native_style / openai_style | gemini-3.1-flash-image-preview |
 
 ![图像生成示例](assets/screenshot_image.png)
 

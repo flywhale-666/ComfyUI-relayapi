@@ -1,7 +1,10 @@
 import json
+import os
+import tempfile
 import time
 import requests
 import comfy.utils  # type: ignore[reportMissingImports]
+import folder_paths  # type: ignore[reportMissingImports]
 from io import BytesIO
 from comfy.comfy_types import IO  # type: ignore[reportMissingImports]
 from comfy_api.latest._input_impl.video_types import VideoFromFile  # type: ignore[reportMissingImports]
@@ -11,14 +14,26 @@ from .utils import tensor2pil
 from .config import get_config, get_current_base_url, API_PATHS
 
 
-def _download_video_as_bytesio(url, timeout=120):
+def _download_video_to_tempfile(url, timeout=120):
     resp = requests.get(url, stream=True, timeout=timeout)
     resp.raise_for_status()
-    buf = BytesIO()
-    for chunk in resp.iter_content(chunk_size=8192):
-        buf.write(chunk)
-    buf.seek(0)
-    return buf
+    content_type = resp.headers.get("Content-Type", "")
+    ext = ".mp4"
+    if "webm" in content_type:
+        ext = ".webm"
+    elif "quicktime" in content_type:
+        ext = ".mov"
+    temp_dir = folder_paths.get_temp_directory()
+    os.makedirs(temp_dir, exist_ok=True)
+    fd, temp_path = tempfile.mkstemp(suffix=ext, dir=temp_dir)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=8192):
+                f.write(chunk)
+    except Exception:
+        os.unlink(temp_path)
+        raise
+    return temp_path
 
 
 GROK_RATIOS = ["AUTO", "16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3"]
@@ -113,10 +128,11 @@ class RelayVideoGenerator:
             return None
 
     def _get_paths(self, api_format):
-        return API_PATHS.get(api_format, API_PATHS["video_v1"])
+        key = "video_" + api_format
+        return API_PATHS.get(key, API_PATHS["video_native_style"])
 
     def _grok_create(self, base_url, api_key, model, prompt, ratio, size,
-                     duration, images, seed, pbar, api_format="video_v1"):
+                     duration, images, seed, pbar, api_format="native_style"):
         paths = self._get_paths(api_format)
         payload = {
             "model": model or "grok-video-3",
@@ -142,7 +158,7 @@ class RelayVideoGenerator:
                 else:
                     return self._err("Failed to convert image " + str(i + 1) + ".")
 
-            if api_format == "video_v2":
+            if api_format == "openai_style":
                 payload["image"] = b64_list[0]
                 if len(b64_list) > 1:
                     payload["images"] = b64_list
@@ -199,7 +215,7 @@ class RelayVideoGenerator:
 
         return None
 
-    def _grok_query(self, base_url, api_key, task_id, api_format="video_v1"):
+    def _grok_query(self, base_url, api_key, task_id, api_format="native_style"):
         paths = self._get_paths(api_format)
         url = base_url + paths['grok_query'].format(task_id=task_id)
         resp = requests.get(url, headers=self._headers_json(api_key), timeout=30)
@@ -219,7 +235,7 @@ class RelayVideoGenerator:
         return "720x1280" if vertical else "1280x720"
 
     def _veo_create(self, base_url, api_key, model, prompt, ratio, size,
-                    enhance_prompt, enable_HD, images, pbar, api_format="video_v1"):
+                    enhance_prompt, enable_HD, images, pbar, api_format="native_style"):
         paths = self._get_paths(api_format)
 
         model_has_4k = model and "4k" in model.lower()
@@ -277,7 +293,7 @@ class RelayVideoGenerator:
         print("[RelayAPI] Veo task: " + task_id)
         return task_id
 
-    def _veo_query(self, base_url, api_key, task_id, api_format="video_v1"):
+    def _veo_query(self, base_url, api_key, task_id, api_format="native_style"):
         paths = self._get_paths(api_format)
         url = base_url + paths['veo_query'].format(task_id=task_id)
         resp = requests.get(url,
@@ -367,7 +383,7 @@ class RelayVideoGenerator:
             base_url = raw_base.strip().rstrip('/') if raw_base.strip() else get_current_base_url()
             platform = (parsed.get("platform") or "Grok").strip()
             model = parsed.get("model", "")
-            api_format = parsed.get("api_format", "video_v1")
+            api_format = parsed.get("api_format", "native_style")
             print("[RelayAPI] " + platform + " | " + api_format + " | " + base_url + " | " + model)
             images = [img for img in [image1, image2, image3, image4, image5, image6, image7] if img is not None]
 
@@ -395,8 +411,8 @@ class RelayVideoGenerator:
             pbar.update_absolute(90)
             print("[RelayAPI] Downloading video: " + video_url)
 
-            video_buf = _download_video_as_bytesio(video_url)
-            video_obj = VideoFromFile(video_buf)
+            video_path = _download_video_to_tempfile(video_url)
+            video_obj = VideoFromFile(video_path)
             pbar.update_absolute(100)
             print("[RelayAPI] Video ready")
 

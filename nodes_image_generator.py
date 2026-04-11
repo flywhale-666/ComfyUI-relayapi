@@ -68,11 +68,11 @@ class RelayImageGenerator:
         return buffered.getvalue()
 
     # ══════════════════════════════════════
-    #  image_v1 — Gemini 原生（多图 inline_data）
+    #  native — Gemini 原生（多图 inline_data）
     # ══════════════════════════════════════
     def _gemini_generate(self, base_url, api_key, model, prompt, ratio, size,
                          images, seed, pbar):
-        paths = API_PATHS.get("image_v1", {})
+        paths = API_PATHS.get("image_native_style", {})
         path_tpl = paths.get("generate", "/v1beta/models/{model}:generateContent")
         url = f"{base_url}{path_tpl.format(model=model)}"
 
@@ -116,10 +116,10 @@ class RelayImageGenerator:
         return resp.json()
 
     # ══════════════════════════════════════
-    #  image_v2 — OpenAI Images 兼容
+    #  openai — OpenAI Images 兼容
     # ══════════════════════════════════════
     def _openai_text2img(self, base_url, api_key, model, prompt, ratio, size, seed, pbar):
-        paths = API_PATHS.get("image_v2", {})
+        paths = API_PATHS.get("image_openai_style", {})
         url = f"{base_url}{paths.get('generate', '/v1/images/generations')}"
 
         payload = {
@@ -149,7 +149,7 @@ class RelayImageGenerator:
 
     def _openai_edit(self, base_url, api_key, model, prompt, ratio, size,
                      images, seed, pbar):
-        paths = API_PATHS.get("image_v2", {})
+        paths = API_PATHS.get("image_openai_style", {})
         url = f"{base_url}{paths.get('edit', '/v1/images/edits')}"
 
         data_dict = {
@@ -241,7 +241,7 @@ class RelayImageGenerator:
             raw_base = parsed.get("api_base", "")
             base_url = raw_base.strip().rstrip('/') if raw_base.strip() else get_current_base_url()
             model = parsed.get("model", "")
-            api_format = parsed.get("api_format", "image_v2")
+            api_format = parsed.get("api_format", "openai_style")
             platform = parsed.get("platform", "banana-pro")
             print(f"[RelayAPI] image | {platform} | {api_format} | {base_url} | {model}")
 
@@ -256,7 +256,7 @@ class RelayImageGenerator:
             pbar = comfy.utils.ProgressBar(100)
             pbar.update_absolute(10)
 
-            if api_format == "image_v1":
+            if api_format == "native_style":
                 result = self._gemini_generate(
                     base_url, api_key, model, prompt, ratio, size,
                     images, seed, pbar,

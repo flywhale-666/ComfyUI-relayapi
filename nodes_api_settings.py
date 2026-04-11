@@ -38,7 +38,7 @@ class RelayAPISettings:
             "required": {
                 "task_type": (TASK_TYPES, {"default": "video"}),
                 "platform": (PLATFORMS, {"default": PLATFORMS[0]}),
-                "api_format": (ALL_API_FORMATS, {"default": "video_v1"}),
+                "api_format": (ALL_API_FORMATS, {"default": "native_style"}),
                 "api_base": (api_base_list, {"default": api_base_list[0]}),
                 "model": (all_models, {"default": all_models[0]}),
                 "apikey": ("STRING", {"default": ""}),
