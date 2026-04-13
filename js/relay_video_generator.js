@@ -14,7 +14,24 @@ const VEO_DURATIONS = ["4", "6", "8"];
 const GROK_MAX_IMAGES = 7;
 const VEO_MAX_IMAGES = 3;
 
-function hideWidget(node, widget) {
+function applyMinSize(node, preferred) {
+    if (!node || typeof node.computeSize !== "function") return;
+    const computed = node.computeSize();
+    const current = Array.isArray(preferred) ? preferred : (Array.isArray(node.size) ? node.size : computed);
+    node.setSize([
+        Math.max(current[0] || 0, computed[0] || 0),
+        Math.max(current[1] || 0, computed[1] || 0),
+    ]);
+}
+
+function preserveNodeSize(node, preferred) {
+    if (!Array.isArray(preferred)) return;
+    applyMinSize(node, preferred);
+    setTimeout(() => applyMinSize(node, preferred), 0);
+    requestAnimationFrame(() => applyMinSize(node, preferred));
+}
+
+function hideWidget(widget) {
     if (widget.type === "hidden") return;
     widget._origType = widget.type;
     widget._origComputeSize = widget.computeSize;
@@ -22,7 +39,7 @@ function hideWidget(node, widget) {
     widget.computeSize = () => [0, -4];
 }
 
-function showWidget(node, widget) {
+function showWidget(widget) {
     if (widget.type !== "hidden") return;
     widget.type = widget._origType || "combo";
     if (widget._origComputeSize) {
@@ -32,7 +49,7 @@ function showWidget(node, widget) {
     }
 }
 
-function applyPlatform(node, platform) {
+function applyPlatform(node, platform, preferredSize) {
     const plat = (platform || "Grok").trim();
     let changed = false;
     const maxImg = plat === "Veo" ? VEO_MAX_IMAGES : GROK_MAX_IMAGES;
@@ -40,8 +57,8 @@ function applyPlatform(node, platform) {
     for (const w of node.widgets || []) {
         if (VEO_ONLY_WIDGETS.includes(w.name)) {
             const shouldHide = plat !== "Veo";
-            if (shouldHide && w.type !== "hidden") { hideWidget(node, w); changed = true; }
-            if (!shouldHide && w.type === "hidden") { showWidget(node, w); changed = true; }
+            if (shouldHide && w.type !== "hidden") { hideWidget(w); changed = true; }
+            if (!shouldHide && w.type === "hidden") { showWidget(w); changed = true; }
         }
 
         if (w.name === "ratio") {
@@ -99,7 +116,7 @@ function applyPlatform(node, platform) {
     }
 
     if (changed) {
-        node.setSize(node.computeSize());
+        preserveNodeSize(node, preferredSize);
         app.graph.setDirtyCanvas(true);
     }
 }
@@ -135,13 +152,14 @@ app.registerExtension({
 
         node._lastPlatform = null;
         node._lastHasImage = null;
-        applyPlatform(node, "Grok");
+        applyPlatform(node, "Grok", Array.isArray(node.size) ? [...node.size] : null);
 
         setInterval(() => {
+            const preferredSize = Array.isArray(node.size) ? [...node.size] : null;
             const plat = getPlatformFromSource(node);
             if (plat !== node._lastPlatform) {
                 node._lastPlatform = plat;
-                applyPlatform(node, plat);
+                applyPlatform(node, plat, preferredSize);
             }
 
             const hasImg = hasImageConnected(node);
@@ -152,6 +170,7 @@ app.registerExtension({
                     const target = hasImg ? "AUTO" : "16:9";
                     if (ratioW.options.values.includes(target) && ratioW.value !== target) {
                         ratioW.value = target;
+                        preserveNodeSize(node, preferredSize);
                         app.graph.setDirtyCanvas(true);
                     }
                 }

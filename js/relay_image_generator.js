@@ -3,6 +3,23 @@ import { app } from "../../scripts/app.js";
 const PRO_MAX_IMAGES = 14;
 const FLASH_MAX_IMAGES = 3;
 
+function applyMinSize(node, preferred) {
+    if (!node || typeof node.computeSize !== "function") return;
+    const computed = node.computeSize();
+    const current = Array.isArray(preferred) ? preferred : (Array.isArray(node.size) ? node.size : computed);
+    node.setSize([
+        Math.max(current[0] || 0, computed[0] || 0),
+        Math.max(current[1] || 0, computed[1] || 0),
+    ]);
+}
+
+function preserveNodeSize(node, preferred) {
+    if (!Array.isArray(preferred)) return;
+    applyMinSize(node, preferred);
+    setTimeout(() => applyMinSize(node, preferred), 0);
+    requestAnimationFrame(() => applyMinSize(node, preferred));
+}
+
 function getPlatformFromSource(node) {
     const infoSlot = node.inputs?.find(i => i.name === "info");
     if (!infoSlot || !infoSlot.link) return "banana-pro";
@@ -24,7 +41,7 @@ function hasImageConnected(node) {
     return false;
 }
 
-function applyPlatform(node, platform) {
+function applyPlatform(node, platform, preferredSize) {
     const maxImg = platform === "banana-2" ? FLASH_MAX_IMAGES : PRO_MAX_IMAGES;
     let changed = false;
 
@@ -55,7 +72,7 @@ function applyPlatform(node, platform) {
     }
 
     if (changed) {
-        node.setSize(node.computeSize());
+        preserveNodeSize(node, preferredSize);
         app.graph.setDirtyCanvas(true);
     }
 }
@@ -70,13 +87,14 @@ app.registerExtension({
 
         node._lastPlatform = null;
         node._lastHasImage = null;
-        applyPlatform(node, "banana-pro");
+        applyPlatform(node, "banana-pro", Array.isArray(node.size) ? [...node.size] : null);
 
         setInterval(() => {
+            const preferredSize = Array.isArray(node.size) ? [...node.size] : null;
             const plat = getPlatformFromSource(node);
             if (plat !== node._lastPlatform) {
                 node._lastPlatform = plat;
-                applyPlatform(node, plat);
+                applyPlatform(node, plat, preferredSize);
             }
 
             const hasImg = hasImageConnected(node);
@@ -87,6 +105,7 @@ app.registerExtension({
                     const target = hasImg ? "AUTO" : "1:1";
                     if (ratioW.options.values.includes(target) && ratioW.value !== target) {
                         ratioW.value = target;
+                        preserveNodeSize(node, preferredSize);
                         app.graph.setDirtyCanvas(true);
                     }
                 }

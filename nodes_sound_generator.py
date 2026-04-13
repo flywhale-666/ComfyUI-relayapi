@@ -15,7 +15,7 @@ MODE_CUSTOM = "\u6b4c\u8bcd\u5b9a\u5236\u6a21\u5f0f"
 
 SOUND_GENERATION_MODES = [MODE_DESCRIPTION, MODE_CUSTOM]
 SOUND_VERSIONS = ["V3", "V3.5", "V4", "V4.5", "V4.5+", "V5", "V5.5"]
-SOUND_VERSION_MODEL_MAP = {
+SOUND_VERSION_MODEL_MAP_OPENAI = {
     "V3": "chirp-v3.0",
     "V3.5": "chirp-v3.5",
     "V4": "chirp-v4",
@@ -23,6 +23,15 @@ SOUND_VERSION_MODEL_MAP = {
     "V4.5+": "chirp-bluejay",
     "V5": "chirp-crow",
     "V5.5": "chirp-fenix",
+}
+SOUND_VERSION_MODEL_MAP_NATIVE = {
+    "V3": "chirp-v3-0",
+    "V3.5": "chirp-v3-5",
+    "V4": "chirp-v4",
+    "V4.5": "chirp-auk",
+    "V4.5+": "chirp-auk",
+    "V5": "chirp-v5",
+    "V5.5": "chirp-v5",
 }
 SOUND_SETTINGS_MODEL_BY_FORMAT = {
     "native_style": "suno_music",
@@ -119,6 +128,30 @@ class RelaySoundGenerator:
         key = f"sound_{api_format}"
         return API_PATHS.get(key, API_PATHS["sound_openai_style"])
 
+    def _get_version_model(self, api_format, version):
+        if api_format == "native_style":
+            return SOUND_VERSION_MODEL_MAP_NATIVE.get(version, "chirp-v5")
+        return SOUND_VERSION_MODEL_MAP_OPENAI.get(version, "chirp-crow")
+
+    def _extract_task_id(self, result):
+        if not isinstance(result, dict):
+            return ""
+
+        direct_task_id = result.get("id") or result.get("task_id")
+        if isinstance(direct_task_id, str) and direct_task_id.strip():
+            return direct_task_id.strip()
+
+        data = result.get("data")
+        if isinstance(data, str) and data.strip():
+            return data.strip()
+
+        if isinstance(data, dict):
+            nested_task_id = data.get("id") or data.get("task_id") or data.get("data")
+            if isinstance(nested_task_id, str) and nested_task_id.strip():
+                return nested_task_id.strip()
+
+        return ""
+
     def _build_native_payload(
         self,
         generation_mode,
@@ -136,17 +169,21 @@ class RelaySoundGenerator:
         cleaned_clip_id = continue_clip_id.strip()
 
         if generation_mode == MODE_DESCRIPTION:
-            payload = {"gpt_description_prompt": cleaned_prompt}
-            if version_model:
-                payload["mv"] = version_model
-            if cleaned_title:
-                payload["title"] = cleaned_title
+            payload = {
+                "gpt_description_prompt": cleaned_prompt,
+                "mv": version_model,
+                "prompt": "",
+            }
             if make_instrumental:
                 payload["make_instrumental"] = True
+            if cleaned_title:
+                payload["title"] = cleaned_title
+            if cleaned_tags:
+                payload["tags"] = cleaned_tags
             return payload
 
         payload = {
-            "prompt": cleaned_prompt,
+            "prompt": "" if make_instrumental else cleaned_prompt,
             "mv": version_model,
             "title": cleaned_title,
             "tags": cleaned_tags,
@@ -154,10 +191,12 @@ class RelaySoundGenerator:
         if cleaned_clip_id:
             payload["continue_clip_id"] = cleaned_clip_id
             payload["continue_at"] = max(0, int(float(continue_at)))
+            payload["task"] = "extend"
         return payload
 
     def _build_openai_payload(
         self,
+        generation_mode,
         version_model,
         title,
         tags,
@@ -167,13 +206,29 @@ class RelaySoundGenerator:
         continue_clip_id,
         continue_at,
     ):
-        payload = {
-            "prompt": prompt.strip(),
-            "mv": version_model,
-            "title": title.strip(),
-            "tags": tags.strip(),
-            "make_instrumental": bool(make_instrumental),
-        }
+        cleaned_title = title.strip()
+        cleaned_tags = tags.strip()
+        cleaned_prompt = prompt.strip()
+
+        if generation_mode == MODE_DESCRIPTION:
+            payload = {
+                "gpt_description_prompt": cleaned_prompt,
+                "mv": version_model,
+                "prompt": "",
+            }
+            if make_instrumental:
+                payload["make_instrumental"] = True
+            if cleaned_title:
+                payload["title"] = cleaned_title
+            if cleaned_tags:
+                payload["tags"] = cleaned_tags
+        else:
+            payload = {
+                "prompt": "" if make_instrumental else cleaned_prompt,
+                "mv": version_model,
+                "title": cleaned_title,
+                "tags": cleaned_tags,
+            }
 
         cleaned_negative_tags = negative_tags.strip()
         if cleaned_negative_tags:
@@ -219,6 +274,7 @@ class RelaySoundGenerator:
             )
         else:
             payload = self._build_openai_payload(
+                generation_mode=generation_mode,
                 version_model=version_model,
                 title=title,
                 tags=tags,
@@ -237,7 +293,7 @@ class RelaySoundGenerator:
             self._err(f"Suno create error: {resp.status_code} - {resp.text[:500]}")
 
         result = resp.json()
-        task_id = result.get("id") or result.get("task_id")
+        task_id = self._extract_task_id(result)
         if not task_id:
             self._err(f"No task ID returned: {json.dumps(result, ensure_ascii=False)[:500]}")
         return task_id, result
@@ -255,19 +311,55 @@ class RelaySoundGenerator:
             if isinstance(nested_clips, list):
                 yield nested_clips
 
-    def _extract_first_clip(self, query_result):
+    def _is_terminal_status(self, status):
+        lowered = str(status or "").strip().lower()
+        if not lowered:
+            return False
+        if any(flag in lowered for flag in ("fail", "error", "cancel")):
+            return True
+        return any(flag in lowered for flag in ("success", "succeed", "complete", "completed", "done"))
+
+    def _clip_duration_value(self, clip):
+        duration = clip.get("duration", 0)
+        try:
+            return float(duration or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _extract_best_clip(self, query_result, require_terminal=False):
+        candidates = []
         for clips in self._iter_clip_lists(query_result):
             for clip in clips:
                 if not isinstance(clip, dict):
                     continue
                 audio_url = clip.get("audio_url", "")
-                if isinstance(audio_url, str) and audio_url.startswith("http"):
-                    return {
+                if not isinstance(audio_url, str) or not audio_url.startswith("http"):
+                    continue
+
+                clip_status = f"{clip.get('status', '')} {clip.get('state', '')}"
+                if require_terminal and not self._is_terminal_status(clip_status):
+                    continue
+
+                candidates.append(
+                    {
                         "clip_id": clip.get("clip_id") or clip.get("id") or "",
                         "audio_url": audio_url,
                         "clip": clip,
+                        "duration": self._clip_duration_value(clip),
+                        "terminal": self._is_terminal_status(clip_status),
                     }
-        return None
+                )
+
+        if not candidates:
+            return None
+
+        candidates.sort(key=lambda item: (item["terminal"], item["duration"]), reverse=True)
+        best = candidates[0]
+        return {
+            "clip_id": best["clip_id"],
+            "audio_url": best["audio_url"],
+            "clip": best["clip"],
+        }
 
     def _extract_status(self, query_result):
         data = query_result.get("data")
@@ -315,16 +407,19 @@ class RelaySoundGenerator:
                     except ValueError:
                         pass
 
-                clip_info = self._extract_first_clip(result)
-                if clip_info:
-                    return clip_info, result
-
                 if any(flag in status for flag in ("fail", "error")):
                     data = result.get("data") or {}
                     if not isinstance(data, dict):
                         data = {}
                     reason = data.get("fail_reason") or result.get("message") or status
                     self._err(f"Suno task failed: {reason}")
+
+                if self._is_terminal_status(status):
+                    clip_info = self._extract_best_clip(result, require_terminal=True)
+                    if not clip_info:
+                        clip_info = self._extract_best_clip(result, require_terminal=False)
+                    if clip_info:
+                        return clip_info, result
             except requests.exceptions.Timeout:
                 continue
             except RuntimeError:
@@ -376,7 +471,7 @@ class RelaySoundGenerator:
             settings_model = (parsed.get("model") or "").strip()
             api_format = (parsed.get("api_format") or "native_style").strip()
             task_type = (parsed.get("task_type") or "sound").strip()
-            version_model = SOUND_VERSION_MODEL_MAP.get(version, "chirp-crow")
+            version_model = self._get_version_model(api_format, version)
 
             if task_type != "sound":
                 self._err("Relay API Settings task_type must be sound.")
