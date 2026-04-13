@@ -9,7 +9,7 @@ DEFAULT_API_BASES = [
     "https://ai.t8star.cn",
 ]
 
-TASK_TYPES = ["video", "image", "sound", "other"]
+TASK_TYPES = ["video", "image", "sound"]
 
 DEFAULT_MODELS = {
     # video
@@ -18,6 +18,7 @@ DEFAULT_MODELS = {
     # image — 通用 fallback
     "banana-pro": ["nano-banana-pro"],
     "banana-2": ["gemini-3.1-flash-image-preview"],
+    "Suno": ["suno_music"],
 }
 
 FORMAT_MODELS = {
@@ -25,12 +26,16 @@ FORMAT_MODELS = {
         "native_style": ["gemini-3-pro-image-preview"],
         "openai_style": ["nano-banana-pro"],
     },
+    "Suno": {
+        "native_style": ["suno_music"],
+        "openai_style": ["suno_music"],
+    },
 }
 
 TASK_PLATFORMS = {
     "video": ["Grok", "Veo"],
     "image": ["banana-pro", "banana-2"],
-    "sound": [],
+    "sound": ["Suno"],
     "other": [],
 }
 
@@ -38,15 +43,21 @@ PLATFORMS = list(DEFAULT_MODELS.keys())
 
 VIDEO_API_FORMATS = ["native_style", "openai_style"]
 IMAGE_API_FORMATS = ["native_style", "openai_style"]
+SOUND_API_FORMATS = ["native_style", "openai_style"]
 
 API_FORMATS_BY_TASK = {
     "video": VIDEO_API_FORMATS,
     "image": IMAGE_API_FORMATS,
-    "sound": ["native_style"],
-    "other": ["native_style"],
+    "sound": SOUND_API_FORMATS,
 }
 
-ALL_API_FORMATS = list(dict.fromkeys(VIDEO_API_FORMATS + IMAGE_API_FORMATS))
+ALL_API_FORMATS = list(
+    dict.fromkeys(
+        fmt
+        for task_formats in API_FORMATS_BY_TASK.values()
+        for fmt in task_formats
+    )
+)
 
 API_PATHS = {
     "video_native_style": {
@@ -68,6 +79,14 @@ API_PATHS = {
     "image_openai_style": {
         "generate": "/v1/images/generations",
         "edit": "/v1/images/edits",
+    },
+    "sound_native_style": {
+        "suno_create": "/suno/generate",
+        "suno_query": "/suno/fetch/{task_id}",
+    },
+    "sound_openai_style": {
+        "suno_create": "/suno/submit/music",
+        "suno_query": "/suno/fetch/{task_id}",
     },
 }
 
@@ -139,6 +158,8 @@ def add_custom_model(platform, model):
     model = model.strip()
     if not model:
         return
+    if platform == "Suno":
+        return
     config = get_config()
     custom_models = config.get('custom_models', {})
     removed_models = config.get('removed_models', {})
@@ -157,6 +178,8 @@ def add_custom_model(platform, model):
 def remove_model(platform, model):
     model = model.strip()
     if not model:
+        return
+    if platform == "Suno":
         return
     config = get_config()
     custom_models = config.get('custom_models', {})

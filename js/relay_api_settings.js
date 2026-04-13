@@ -4,15 +4,13 @@ import { api } from "../../scripts/api.js";
 const TASK_PLATFORMS = {
     video: ["Grok", "Veo"],
     image: ["banana-pro", "banana-2"],
-    sound: [],
-    other: [],
+    sound: ["Suno"],
 };
 
 const TASK_API_FORMATS = {
     video: ["native_style", "openai_style"],
     image: ["native_style", "openai_style"],
-    sound: ["native_style"],
-    other: ["native_style"],
+    sound: ["native_style", "openai_style"],
 };
 
 app.registerExtension({

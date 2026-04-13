@@ -2,6 +2,7 @@ from .nodes_api_settings import RelayAPISettings
 from .nodes_video_generator import RelayVideoGenerator
 from .nodes_image_generator import RelayImageGenerator
 from .nodes_notice import RelayAPINotice
+from .nodes_sound_generator import RelaySoundGenerator
 
 try:
     from .config import register_routes
@@ -14,6 +15,7 @@ NODE_CLASS_MAPPINGS = {
     "RelayVideoGenerator": RelayVideoGenerator,
     "RelayImageGenerator": RelayImageGenerator,
     "RelayAPINotice": RelayAPINotice,
+    "RelaySoundGenerator": RelaySoundGenerator,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -21,6 +23,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RelayVideoGenerator": "Relay Video Generator",
     "RelayImageGenerator": "Relay Image Generator",
     "RelayAPINotice": "Relay API Notice",
+    "RelaySoundGenerator": "Relay Sound Generator",
 }
 
 WEB_DIRECTORY = "./js"
