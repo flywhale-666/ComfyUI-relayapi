@@ -1,8 +1,8 @@
 import json
 from .config import (
-    get_config, save_config, get_api_base_list, get_model_list,
+    get_config, get_api_base_list,
     add_custom_api_base, add_custom_model,
-    get_current_base_url, set_current_base_url,
+    set_current_base_url, get_node_api_key, save_node_settings,
     PLATFORMS, TASK_TYPES, ALL_API_FORMATS, DEFAULT_MODELS, FORMAT_MODELS,
 )
 
@@ -52,7 +52,10 @@ class RelayAPISettings:
                     "default": "",
                     "placeholder": "输入模型名添加 | 输入 delete:模型名 删除",
                 }),
-            }
+            },
+            "hidden": {
+                "unique_id": "UNIQUE_ID",
+            },
         }
 
     RETURN_TYPES = ("STRING",)
@@ -69,9 +72,11 @@ class RelayAPISettings:
         return float("NaN")
 
     def set_api(self, task_type, platform, api_format, api_base, model, apikey="",
-                custom_api_base="", custom_model=""):
+                custom_api_base="", custom_model="", unique_id=None):
         custom_api_base = custom_api_base.strip().rstrip('/')
         custom_model = custom_model.strip()
+        plain_apikey = apikey.strip()
+        has_plain_apikey = bool(plain_apikey and plain_apikey.isascii() and "\u2022" not in plain_apikey)
 
         if custom_api_base:
             base_url = custom_api_base
@@ -87,12 +92,15 @@ class RelayAPISettings:
 
         set_current_base_url(base_url)
 
-        config = get_config()
-        if apikey.strip() and apikey.isascii() and "\u2022" not in apikey:
-            config['api_key'] = apikey
-            save_config(config)
+        if has_plain_apikey:
+            save_node_settings(unique_id, api_key=plain_apikey, base_url=base_url)
+        elif unique_id is not None:
+            save_node_settings(unique_id, base_url=base_url)
 
-        real_key = config.get('api_key', apikey)
+        if has_plain_apikey:
+            real_key = plain_apikey
+        else:
+            real_key = get_node_api_key(unique_id)
 
         info = json.dumps({
             "apikey": real_key,

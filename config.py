@@ -104,6 +104,56 @@ def save_config(config):
         json.dump(config, f, indent=4, ensure_ascii=False)
 
 
+def _normalize_node_id(node_id):
+    if node_id is None:
+        return ""
+    return str(node_id).strip()
+
+
+def get_node_settings(node_id):
+    normalized = _normalize_node_id(node_id)
+    if not normalized:
+        return {}
+    config = get_config()
+    node_settings = config.get("node_settings", {})
+    settings = node_settings.get(normalized, {})
+    return settings if isinstance(settings, dict) else {}
+
+
+def save_node_settings(node_id, **updates):
+    normalized = _normalize_node_id(node_id)
+    if not normalized:
+        return
+
+    config = get_config()
+    node_settings = config.get("node_settings", {})
+    current = node_settings.get(normalized, {})
+    if not isinstance(current, dict):
+        current = {}
+
+    for key, value in updates.items():
+        if value is None:
+            current.pop(key, None)
+        else:
+            current[key] = value
+
+    if current:
+        node_settings[normalized] = current
+    else:
+        node_settings.pop(normalized, None)
+
+    config["node_settings"] = node_settings
+    save_config(config)
+
+
+def get_node_api_key(node_id):
+    settings = get_node_settings(node_id)
+    api_key = settings.get("api_key", "")
+    if isinstance(api_key, str) and api_key.strip():
+        return api_key
+    return ""
+
+
 def get_api_base_list():
     config = get_config()
     custom_bases = config.get('custom_api_bases', [])
