@@ -64,6 +64,10 @@ class RelaySoundGenerator:
                     },
                 ),
                 "version": (SOUND_VERSIONS, {"default": "V5"}),
+                "seed": (
+                    "INT",
+                    {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF, "control_after_generate": True},
+                ),
             },
             "optional": {
                 "info": ("STRING", {"default": "", "forceInput": True}),
@@ -87,10 +91,6 @@ class RelaySoundGenerator:
                     },
                 ),
                 "continue_at": ("FLOAT", {"default": 0.0, "min": 0.0, "step": 0.1}),
-                "seed": (
-                    "INT",
-                    {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF, "control_after_generate": True},
-                ),
             },
         }
 
@@ -442,12 +442,12 @@ class RelaySoundGenerator:
         prompt,
         make_instrumental,
         version,
+        seed,
         info="",
         negative_tags="",
         extend_mode=False,
         continue_clip_id="",
         continue_at=0.0,
-        seed=0,
     ):
         parsed = {}
         if info and info.strip():

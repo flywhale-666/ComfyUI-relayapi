@@ -26,13 +26,13 @@ class RelayImageGenerator:
         }
         for i in range(1, ALL_MAX_IMAGES + 1):
             optional[f"image{i}"] = ("IMAGE",)
-        optional["seed"] = ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "control_after_generate": True})
 
         return {
             "required": {
                 "prompt": ("STRING", {"multiline": True}),
                 "ratio": (IMAGE_RATIOS, {"default": "1:1"}),
                 "size": (IMAGE_SIZES, {"default": "2K"}),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "control_after_generate": True}),
             },
             "optional": optional,
         }
@@ -219,7 +219,7 @@ class RelayImageGenerator:
     # ══════════════════════════════════════
     #  主入口
     # ══════════════════════════════════════
-    def generate_image(self, prompt, ratio, size, info="", seed=0, **kwargs):
+    def generate_image(self, prompt, ratio, size, seed, info="", **kwargs):
         parsed = {}
         if info and info.strip():
             try:

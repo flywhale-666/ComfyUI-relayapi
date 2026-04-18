@@ -60,6 +60,7 @@ class RelayVideoGenerator:
                 "ratio": (ALL_RATIOS, {"default": "16:9"}),
                 "size": (ALL_SIZES, {"default": "720P"}),
                 "duration": (ALL_DURATIONS, {"default": "10"}),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "control_after_generate": True}),
             },
             "optional": {
                 "info": ("STRING", {"default": "", "forceInput": True}),
@@ -72,7 +73,6 @@ class RelayVideoGenerator:
                 "image5": ("IMAGE",),
                 "image6": ("IMAGE",),
                 "image7": ("IMAGE",),
-                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "control_after_generate": True}),
             }
         }
 
@@ -355,11 +355,11 @@ class RelayVideoGenerator:
 
         return self._err("No result after " + str(round(time.time() - start, 1)) + "s")
 
-    def generate_video(self, prompt, ratio, size, duration,
+    def generate_video(self, prompt, ratio, size, duration, seed,
                        info="",
                        enhance_prompt="true", enable_HD="false",
                        image1=None, image2=None, image3=None,
-                       image4=None, image5=None, image6=None, image7=None, seed=0):
+                       image4=None, image5=None, image6=None, image7=None):
         parsed = {}
         if info and info.strip():
             try:
