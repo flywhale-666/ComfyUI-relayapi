@@ -67,9 +67,10 @@ class RelayAPISettings:
     def VALIDATE_INPUTS(cls, model=None, api_base=None, **kwargs):
         return True
 
-    @classmethod
-    def IS_CHANGED(cls, **kwargs):
-        return float("NaN")
+    # 不再返 NaN 强制每次重跑。删掉这个钩子后 ComfyUI 会按"输入值是否变化"
+    # 判断缓存：task_type / platform / api_format / api_base / model / apikey
+    # 任一个改动才重跑，否则命中缓存，下游节点（例如 seed 固定的图像生成节点）
+    # 也能真正复用上次的结果，不会再白白调一次 API。
 
     def set_api(self, task_type, platform, api_format, api_base, model, apikey="",
                 custom_api_base="", custom_model="", unique_id=None):
@@ -82,23 +83,13 @@ class RelayAPISettings:
         else:
             base_url = api_base
 
-        is_bltcy_gpt_image2 = (
-            platform == "gpt-image2"
-            and base_url.strip().rstrip('/').lower() == "https://api.bltcy.ai"
-        )
-        if is_bltcy_gpt_image2:
-            api_format = "openai_style"
-        elif platform == "gpt-image2":
-            api_format = "native_style"
-
+        # api_format 由用户手动选择，不再根据 base_url 自动覆盖
         plain_apikey = apikey.strip()
         has_plain_apikey = bool(plain_apikey and plain_apikey.isascii() and "\u2022" not in plain_apikey)
 
         if custom_model:
             used_model = custom_model
             add_custom_model(platform, custom_model)
-        elif is_bltcy_gpt_image2:
-            used_model = "gpt-image-2"
         else:
             used_model = model
 

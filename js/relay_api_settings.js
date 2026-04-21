@@ -77,14 +77,9 @@ app.registerExtension({
             }
         }
 
-        function isBltcyBase() {
-            return (api_base?.value || "").replace(/\/+$/, "").toLowerCase() === "https://api.bltcy.ai";
-        }
-
+        // api_format 永远保持两个可选（native_style / openai_style），由用户手动选择
         function applyApiFormats(tt, plat) {
-            const formats = plat === "gpt-image2"
-                ? (isBltcyBase() ? ["openai_style"] : ["native_style"])
-                : (PLATFORM_API_FORMATS[plat] || TASK_API_FORMATS[tt] || ["native_style"]);
+            const formats = PLATFORM_API_FORMATS[plat] || TASK_API_FORMATS[tt] || ["native_style", "openai_style"];
 
             if (api_format && formats.length > 0) {
                 api_format.options.values = formats;
@@ -115,7 +110,6 @@ app.registerExtension({
                 if (Array.isArray(list) && list.length > 0) {
                     api_base.options.values = list;
                     if (!list.includes(api_base.value)) api_base.value = list[0];
-                    applyApiFormats(task_type.value || "video", platform.value || "Grok");
                     refreshModels(platform.value || "Grok", api_format ? api_format.value : "");
                     app.graph.setDirtyCanvas(true);
                 }
@@ -140,7 +134,6 @@ app.registerExtension({
                         api_base.options.values = r.list;
                         if (!r.list.includes(api_base.value)) api_base.value = r.list[0];
                         if (custom_api_base) custom_api_base.value = "";
-                        applyApiFormats(task_type.value || "video", platform.value || "Grok");
                         refreshModels(platform.value || "Grok", api_format ? api_format.value : "");
                         app.graph.setDirtyCanvas(true);
                     }
@@ -159,7 +152,6 @@ app.registerExtension({
                     api_base.options.values = r.list;
                     api_base.value = url;
                     if (custom_api_base) custom_api_base.value = "";
-                    applyApiFormats(task_type.value || "video", platform.value || "Grok");
                     refreshModels(platform.value || "Grok", api_format ? api_format.value : "");
                     app.graph.setDirtyCanvas(true);
                 }
@@ -242,11 +234,10 @@ app.registerExtension({
             refreshModels(value, api_format ? api_format.value : "");
         };
 
-        // ── api_format 切换时刷新模型列表 ──
+        // ── api_base 切换时刷新模型列表 ──
         const origApiBaseCb = api_base.callback;
         api_base.callback = function (value) {
             if (origApiBaseCb) origApiBaseCb.call(this, value);
-            applyApiFormats(task_type.value || "video", platform.value || "Grok");
             refreshModels(platform.value || "Grok", api_format ? api_format.value : "");
         };
 
