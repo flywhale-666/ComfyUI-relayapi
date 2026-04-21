@@ -123,6 +123,10 @@ class RelayImageGenerator:
             return "1536x1024"
         if ratio == "2:3":
             return "1024x1536"
+        if ratio == "16:9":
+            return "1755x896"
+        if ratio == "9:16":
+            return "896x1755"
         if ratio in ("AUTO", "auto") and images:
             img = tensor2pil(images[0])[0]
             width, height = img.size

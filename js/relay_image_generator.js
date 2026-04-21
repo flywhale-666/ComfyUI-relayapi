@@ -4,7 +4,7 @@ const PRO_MAX_IMAGES = 14;
 const FLASH_MAX_IMAGES = 14;
 const GPT_IMAGE2_MAX_IMAGES = 16;
 const DEFAULT_IMAGE_RATIOS = ["AUTO", "1:1", "16:9", "9:16", "4:3", "3:4", "21:9"];
-const GPT_IMAGE2_RATIOS = ["auto", "1:1", "3:2", "2:3"];
+const GPT_IMAGE2_RATIOS = ["auto", "1:1", "3:2", "2:3", "16:9", "9:16"];
 const DEFAULT_IMAGE_SIZES = ["1K", "2K", "4K"];
 const GPT_IMAGE2_SIZES = ["1K"];
 
