@@ -3,8 +3,9 @@ import { app } from "../../scripts/app.js";
 const PRO_MAX_IMAGES = 14;
 const FLASH_MAX_IMAGES = 14;
 const GPT_IMAGE2_MAX_IMAGES = 16;
-const DEFAULT_IMAGE_RATIOS = ["AUTO", "1:1", "16:9", "9:16", "4:3", "3:4", "21:9"];
-const GPT_IMAGE2_RATIOS = ["auto", "1:1", "3:2", "2:3", "16:9", "9:16"];
+// 统一的比例列表：gpt-image2 / banana-pro / banana-2 都用这一个
+// 顺序与 Python 端 IMAGE_RATIOS 保持一致，保证前后端完全对齐
+const IMAGE_RATIOS = ["auto", "1:1", "2:3", "3:2", "4:3", "3:4", "9:16", "16:9", "9:21", "21:9"];
 const DEFAULT_IMAGE_SIZES = ["1K", "2K", "4K"];
 const GPT_IMAGE2_SIZES = ["1K"];
 
@@ -84,7 +85,8 @@ function applyPlatform(node, platform, preferredSize) {
 
     const ratioW = node.widgets?.find(w => w.name === "ratio");
     if (ratioW) {
-        const values = platform === "gpt-image2" ? GPT_IMAGE2_RATIOS : DEFAULT_IMAGE_RATIOS;
+        // 三个平台共用同一套比例列表（见顶部 IMAGE_RATIOS）
+        const values = IMAGE_RATIOS;
         if (!sameValues(ratioW.options?.values, values)) {
             ratioW.options.values = values;
             changed = true;
@@ -97,14 +99,23 @@ function applyPlatform(node, platform, preferredSize) {
 
     const sizeW = node.widgets?.find(w => w.name === "size");
     if (sizeW) {
-        const values = platform === "gpt-image2" ? GPT_IMAGE2_SIZES : DEFAULT_IMAGE_SIZES;
-        if (!sameValues(sizeW.options?.values, values)) {
+        const isGpt = platform === "gpt-image2";
+        const values = isGpt ? GPT_IMAGE2_SIZES : DEFAULT_IMAGE_SIZES;
+        // 各平台的默认档位：gpt-image2 只有 1K；banana-pro / banana-2 默认 2K
+        const defaultSize = isGpt ? "1K" : "2K";
+        const listChanged = !sameValues(sizeW.options?.values, values);
+        if (listChanged) {
             sizeW.options.values = values;
             changed = true;
         }
-        if (!values.includes(sizeW.value)) {
-            sizeW.value = values[0];
-            changed = true;
+        // 列表变了（= 真正切换了 gpt-image2 ↔ banana 系）或者当前值不在新列表里，
+        // 都按目标平台的默认档位重置；banana-pro ↔ banana-2 之间切换列表不变，
+        // 用户手选的 1K / 2K / 4K 会被保留
+        if (listChanged || !values.includes(sizeW.value)) {
+            if (sizeW.value !== defaultSize) {
+                sizeW.value = defaultSize;
+                changed = true;
+            }
         }
     }
 
@@ -130,8 +141,21 @@ app.registerExtension({
             const preferredSize = Array.isArray(node.size) ? [...node.size] : null;
             const plat = getPlatformFromSource(node);
             if (plat !== node._lastPlatform) {
+                const prevPlat = node._lastPlatform;
                 node._lastPlatform = plat;
                 applyPlatform(node, plat, preferredSize);
+
+                // prevPlat === null 代表是节点刚加载时的首次同步（不是用户手动切换），
+                // 这种情况下必须尊重工作流里保存的 size，不做任何调整。
+                // 只有真正的"用户切平台"才把 banana-pro ↔ banana-2 的 1K 自动升到 2K。
+                // （gpt-image2 ↔ banana 之间的切换由 applyPlatform 里列表变更逻辑负责）
+                if (prevPlat !== null && plat !== "gpt-image2") {
+                    const sizeW = node.widgets?.find(w => w.name === "size");
+                    if (sizeW && sizeW.value === "1K" && sizeW.options.values.includes("2K")) {
+                        sizeW.value = "2K";
+                        app.graph.setDirtyCanvas(true);
+                    }
+                }
             }
 
             const hasImg = hasImageConnected(node);
@@ -139,9 +163,8 @@ app.registerExtension({
                 node._lastHasImage = hasImg;
                 const ratioW = node.widgets?.find(w => w.name === "ratio");
                 if (ratioW) {
-                    const target = ratioW.options.values.includes("auto")
-                        ? (hasImg ? "auto" : "1:1")
-                        : (hasImg ? "AUTO" : "1:1");
+                    // 接了参考图默认切 auto（按原图比例出），没接则回 1:1
+                    const target = hasImg ? "auto" : "1:1";
                     if (ratioW.options.values.includes(target) && ratioW.value !== target) {
                         ratioW.value = target;
                         preserveNodeSize(node, preferredSize);
