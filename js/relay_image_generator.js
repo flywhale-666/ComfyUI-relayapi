@@ -1,7 +1,16 @@
 import { app } from "../../scripts/app.js";
 
 const PRO_MAX_IMAGES = 14;
-const FLASH_MAX_IMAGES = 3;
+const FLASH_MAX_IMAGES = 14;
+const GPT_IMAGE2_MAX_IMAGES = 16;
+const DEFAULT_IMAGE_RATIOS = ["AUTO", "1:1", "16:9", "9:16", "4:3", "3:4", "21:9"];
+const GPT_IMAGE2_RATIOS = ["auto", "1:1", "3:2", "2:3"];
+const DEFAULT_IMAGE_SIZES = ["1K", "2K", "4K"];
+const GPT_IMAGE2_SIZES = ["1K"];
+
+function sameValues(a, b) {
+    return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => v === b[i]);
+}
 
 function applyMinSize(node, preferred) {
     if (!node || typeof node.computeSize !== "function") return;
@@ -42,7 +51,9 @@ function hasImageConnected(node) {
 }
 
 function applyPlatform(node, platform, preferredSize) {
-    const maxImg = platform === "banana-2" ? FLASH_MAX_IMAGES : PRO_MAX_IMAGES;
+    const maxImg = platform === "gpt-image2"
+        ? GPT_IMAGE2_MAX_IMAGES
+        : (platform === "banana-2" ? FLASH_MAX_IMAGES : PRO_MAX_IMAGES);
     let changed = false;
 
     for (const input of node.inputs || []) {
@@ -67,6 +78,32 @@ function applyPlatform(node, platform, preferredSize) {
         if (!shouldHide && input._hidden) {
             input._hidden = false;
             input.type = input._origType || "IMAGE";
+            changed = true;
+        }
+    }
+
+    const ratioW = node.widgets?.find(w => w.name === "ratio");
+    if (ratioW) {
+        const values = platform === "gpt-image2" ? GPT_IMAGE2_RATIOS : DEFAULT_IMAGE_RATIOS;
+        if (!sameValues(ratioW.options?.values, values)) {
+            ratioW.options.values = values;
+            changed = true;
+        }
+        if (!values.includes(ratioW.value)) {
+            ratioW.value = values[0];
+            changed = true;
+        }
+    }
+
+    const sizeW = node.widgets?.find(w => w.name === "size");
+    if (sizeW) {
+        const values = platform === "gpt-image2" ? GPT_IMAGE2_SIZES : DEFAULT_IMAGE_SIZES;
+        if (!sameValues(sizeW.options?.values, values)) {
+            sizeW.options.values = values;
+            changed = true;
+        }
+        if (!values.includes(sizeW.value)) {
+            sizeW.value = values[0];
             changed = true;
         }
     }
@@ -102,7 +139,9 @@ app.registerExtension({
                 node._lastHasImage = hasImg;
                 const ratioW = node.widgets?.find(w => w.name === "ratio");
                 if (ratioW) {
-                    const target = hasImg ? "AUTO" : "1:1";
+                    const target = ratioW.options.values.includes("auto")
+                        ? (hasImg ? "auto" : "1:1")
+                        : (hasImg ? "AUTO" : "1:1");
                     if (ratioW.options.values.includes(target) && ratioW.value !== target) {
                         ratioW.value = target;
                         preserveNodeSize(node, preferredSize);

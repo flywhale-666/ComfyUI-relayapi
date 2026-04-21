@@ -8,7 +8,7 @@
 |------|------|
 | **Relay API Settings** | 统一配置 API 中转站地址、密钥、平台和模型 |
 | **Relay Video Generator** | 通过中转站生成视频（支持 Grok / Veo 平台） |
-| **Relay Image Generator** | 通过中转站生成或编辑图像（支持 banana-pro / banana-2 平台） |
+| **Relay Image Generator** | 通过中转站生成或编辑图像（支持 banana-pro / banana-2 / gpt-image2 平台） |
 
 ## 安装
 
@@ -37,7 +37,7 @@ pip install -r requirements.txt
 | 参数 | 说明 |
 |------|------|
 | **task_type** | 任务类型：`video`、`image`、`sound`、`other` |
-| **platform** | 平台选择，跟随 task_type 自动切换。视频：`Grok` / `Veo`；图像：`banana-pro` / `banana-2` |
+| **platform** | 平台选择，跟随 task_type 自动切换。视频：`Grok` / `Veo`；图像：`banana-pro` / `banana-2` / `gpt-image2` |
 | **api_format** | API 协议格式：`native_style`（平台原生风格）/ `openai_style`（OpenAI 兼容风格） |
 | **api_base** | 中转站地址，支持下拉选择或通过 `custom_api_base` 手动添加 |
 | **model** | 模型名称，跟随平台和格式自动刷新，也可通过 `custom_model` 手动添加 |
@@ -87,8 +87,10 @@ pip install -r requirements.txt
 | **prompt** | 图像描述或编辑指令 |
 | **ratio** | 宽高比，默认 `1:1`（无图时）或 `AUTO`（有图时） |
 | **size** | 输出尺寸：`1K` / `2K` / `4K`，默认 `2K` |
-| **image1~14** | 可选输入图片（banana-pro 最多 14 张，banana-2 最多 3 张） |
+| **image1~16** | 可选输入图片（banana-pro 最多 14 张，banana-2 最多 14 张，gpt-image2 最多 16 张） |
 | **seed** | 随机种子 |
+
+> `gpt-image2` 的 `ratio` 下拉仅显示 `auto` / `1:1` / `3:2` / `2:3`，`size` 下拉仅显示 `1K`；实际 API 尺寸分别映射为 `auto`（有 `image1` 时按其宽高比选择最大输出尺寸）、`1024x1024`、`1536x1024`、`1024x1536`。
 
 **输出：**
 - `image` — 生成的图像
@@ -102,6 +104,8 @@ pip install -r requirements.txt
 | banana-pro | native_style | gemini-3-pro-image-preview |
 | banana-pro | openai_style | nano-banana-pro |
 | banana-2 | native_style / openai_style | gemini-3.1-flash-image-preview |
+| gpt-image2 | native_style | gpt-image-2-all |
+| gpt-image2 | openai_style | gpt-image-2 |
 
 ![图像生成示例](assets/screenshot_image.png)
 
@@ -123,6 +127,8 @@ pip install -r requirements.txt
 - 自定义中转站地址
 - 自定义模型
 - API 密钥（加密存储于本地，不会上传）
+
+内置地址包含 `https://www.taikuaila.cn`、`https://ai.t8star.cn`、`https://api.bltcy.ai`。`gpt-image2` 在 taikuaila 使用 `native_style` / `gpt-image-2-all`，在 bltcy 使用 `openai_style` / `gpt-image-2`。
 
 ## 许可
 

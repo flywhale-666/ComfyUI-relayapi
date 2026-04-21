@@ -3,7 +3,7 @@ import { api } from "../../scripts/api.js";
 
 const TASK_PLATFORMS = {
     video: ["Grok", "Veo"],
-    image: ["banana-pro", "banana-2"],
+    image: ["banana-pro", "banana-2", "gpt-image2"],
     sound: ["Suno"],
 };
 
@@ -12,6 +12,8 @@ const TASK_API_FORMATS = {
     image: ["native_style", "openai_style"],
     sound: ["native_style", "openai_style"],
 };
+
+const PLATFORM_API_FORMATS = {};
 
 app.registerExtension({
     name: "RelayAPI.Settings",
@@ -75,21 +77,32 @@ app.registerExtension({
             }
         }
 
+        function isBltcyBase() {
+            return (api_base?.value || "").replace(/\/+$/, "").toLowerCase() === "https://api.bltcy.ai";
+        }
+
+        function applyApiFormats(tt, plat) {
+            const formats = plat === "gpt-image2"
+                ? (isBltcyBase() ? ["openai_style"] : ["native_style"])
+                : (PLATFORM_API_FORMATS[plat] || TASK_API_FORMATS[tt] || ["native_style"]);
+
+            if (api_format && formats.length > 0) {
+                api_format.options.values = formats;
+                if (!formats.includes(api_format.value)) api_format.value = formats[0];
+            }
+        }
+
         function applyTaskType(tt) {
             const platforms = TASK_PLATFORMS[tt] || [];
-            const formats = TASK_API_FORMATS[tt] || ["native_style"];
 
             if (platform && platforms.length > 0) {
                 platform.options.values = platforms;
                 if (!platforms.includes(platform.value)) platform.value = platforms[0];
             }
 
-            if (api_format && formats.length > 0) {
-                api_format.options.values = formats;
-                if (!formats.includes(api_format.value)) api_format.value = formats[0];
-            }
-
-            refreshModels(platform.value || platforms[0] || "Grok");
+            const plat = platform.value || platforms[0] || "Grok";
+            applyApiFormats(tt, plat);
+            refreshModels(plat, api_format ? api_format.value : "");
             app.graph.setDirtyCanvas(true);
         }
 
@@ -102,6 +115,8 @@ app.registerExtension({
                 if (Array.isArray(list) && list.length > 0) {
                     api_base.options.values = list;
                     if (!list.includes(api_base.value)) api_base.value = list[0];
+                    applyApiFormats(task_type.value || "video", platform.value || "Grok");
+                    refreshModels(platform.value || "Grok", api_format ? api_format.value : "");
                     app.graph.setDirtyCanvas(true);
                 }
             } catch (e) { console.warn("[RelayAPI]", e); }
@@ -125,6 +140,8 @@ app.registerExtension({
                         api_base.options.values = r.list;
                         if (!r.list.includes(api_base.value)) api_base.value = r.list[0];
                         if (custom_api_base) custom_api_base.value = "";
+                        applyApiFormats(task_type.value || "video", platform.value || "Grok");
+                        refreshModels(platform.value || "Grok", api_format ? api_format.value : "");
                         app.graph.setDirtyCanvas(true);
                     }
                 } catch (e) { console.warn("[RelayAPI]", e); }
@@ -142,6 +159,8 @@ app.registerExtension({
                     api_base.options.values = r.list;
                     api_base.value = url;
                     if (custom_api_base) custom_api_base.value = "";
+                    applyApiFormats(task_type.value || "video", platform.value || "Grok");
+                    refreshModels(platform.value || "Grok", api_format ? api_format.value : "");
                     app.graph.setDirtyCanvas(true);
                 }
             } catch (e) { console.warn("[RelayAPI]", e); }
@@ -219,10 +238,18 @@ app.registerExtension({
         const origPlatformCb = platform.callback;
         platform.callback = function (value) {
             if (origPlatformCb) origPlatformCb.call(this, value);
-            refreshModels(value);
+            applyApiFormats(task_type.value || "video", value);
+            refreshModels(value, api_format ? api_format.value : "");
         };
 
         // ── api_format 切换时刷新模型列表 ──
+        const origApiBaseCb = api_base.callback;
+        api_base.callback = function (value) {
+            if (origApiBaseCb) origApiBaseCb.call(this, value);
+            applyApiFormats(task_type.value || "video", platform.value || "Grok");
+            refreshModels(platform.value || "Grok", api_format ? api_format.value : "");
+        };
+
         if (api_format) {
             const origFormatCb = api_format.callback;
             api_format.callback = function (value) {

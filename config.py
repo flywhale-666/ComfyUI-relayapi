@@ -7,6 +7,7 @@ CONFIG_FILE = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'relay_c
 DEFAULT_API_BASES = [
     "https://www.taikuaila.cn",
     "https://ai.t8star.cn",
+    "https://api.bltcy.ai",
 ]
 
 TASK_TYPES = ["video", "image", "sound"]
@@ -18,6 +19,7 @@ DEFAULT_MODELS = {
     # image — 通用 fallback
     "banana-pro": ["nano-banana-pro"],
     "banana-2": ["gemini-3.1-flash-image-preview"],
+    "gpt-image2": ["gpt-image-2-all"],
     "Suno": ["suno_music"],
 }
 
@@ -25,6 +27,10 @@ FORMAT_MODELS = {
     "banana-pro": {
         "native_style": ["gemini-3-pro-image-preview"],
         "openai_style": ["nano-banana-pro"],
+    },
+    "gpt-image2": {
+        "native_style": ["gpt-image-2-all"],
+        "openai_style": ["gpt-image-2"],
     },
     "Suno": {
         "native_style": ["suno_music"],
@@ -34,7 +40,7 @@ FORMAT_MODELS = {
 
 TASK_PLATFORMS = {
     "video": ["Grok", "Veo"],
-    "image": ["banana-pro", "banana-2"],
+    "image": ["banana-pro", "banana-2", "gpt-image2"],
     "sound": ["Suno"],
     "other": [],
 }
@@ -75,6 +81,8 @@ API_PATHS = {
     "image_native_style": {
         "generate": "/v1beta/models/{model}:generateContent",
         "edit": "/v1beta/models/{model}:generateContent",
+        "gpt_image2_generate": "/v1/images/generations",
+        "gpt_image2_edit": "/v1/images/edits",
     },
     "image_openai_style": {
         "generate": "/v1/images/generations",

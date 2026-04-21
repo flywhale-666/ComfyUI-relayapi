@@ -31,22 +31,50 @@ function preserveNodeSize(node, preferred) {
     requestAnimationFrame(() => applyMinSize(node, preferred));
 }
 
+function isWidgetHidden(widget) {
+    return widget?.hidden || widget?.type === "hidden";
+}
+
 function hideWidget(widget) {
-    if (widget.type === "hidden") return;
+    if (!widget || isWidgetHidden(widget)) return;
     widget._origType = widget.type;
     widget._origComputeSize = widget.computeSize;
+    widget.hidden = true;
     widget.type = "hidden";
-    widget.computeSize = () => [0, -4];
+    widget.computeSize = () => [0, 0];
+    if (widget.inputEl) {
+        widget.inputEl.style.display = "none";
+        widget.inputEl.style.visibility = "hidden";
+        widget.inputEl.style.pointerEvents = "none";
+        widget.inputEl.tabIndex = -1;
+    }
 }
 
 function showWidget(widget) {
-    if (widget.type !== "hidden") return;
+    if (!widget || !isWidgetHidden(widget)) return;
+    widget.hidden = false;
     widget.type = widget._origType || "combo";
     if (widget._origComputeSize) {
         widget.computeSize = widget._origComputeSize;
     } else {
         delete widget.computeSize;
     }
+    if (widget.inputEl) {
+        widget.inputEl.style.display = "";
+        widget.inputEl.style.visibility = "";
+        widget.inputEl.style.pointerEvents = "";
+        widget.inputEl.tabIndex = 0;
+    }
+}
+
+function needsPlatformApply(node, platform) {
+    const plat = (platform || "Grok").trim();
+    for (const w of node.widgets || []) {
+        if (!VEO_ONLY_WIDGETS.includes(w.name)) continue;
+        const shouldHide = plat !== "Veo";
+        if (shouldHide !== isWidgetHidden(w)) return true;
+    }
+    return false;
 }
 
 function applyPlatform(node, platform, preferredSize) {
@@ -57,8 +85,8 @@ function applyPlatform(node, platform, preferredSize) {
     for (const w of node.widgets || []) {
         if (VEO_ONLY_WIDGETS.includes(w.name)) {
             const shouldHide = plat !== "Veo";
-            if (shouldHide && w.type !== "hidden") { hideWidget(w); changed = true; }
-            if (!shouldHide && w.type === "hidden") { showWidget(w); changed = true; }
+            if (shouldHide && !isWidgetHidden(w)) { hideWidget(w); changed = true; }
+            if (!shouldHide && isWidgetHidden(w)) { showWidget(w); changed = true; }
         }
 
         if (w.name === "ratio") {
@@ -157,7 +185,7 @@ app.registerExtension({
         setInterval(() => {
             const preferredSize = Array.isArray(node.size) ? [...node.size] : null;
             const plat = getPlatformFromSource(node);
-            if (plat !== node._lastPlatform) {
+            if (plat !== node._lastPlatform || needsPlatformApply(node, plat)) {
                 node._lastPlatform = plat;
                 applyPlatform(node, plat, preferredSize);
             }

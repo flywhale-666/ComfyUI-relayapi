@@ -75,8 +75,6 @@ class RelayAPISettings:
                 custom_api_base="", custom_model="", unique_id=None):
         custom_api_base = custom_api_base.strip().rstrip('/')
         custom_model = custom_model.strip()
-        plain_apikey = apikey.strip()
-        has_plain_apikey = bool(plain_apikey and plain_apikey.isascii() and "\u2022" not in plain_apikey)
 
         if custom_api_base:
             base_url = custom_api_base
@@ -84,9 +82,23 @@ class RelayAPISettings:
         else:
             base_url = api_base
 
+        is_bltcy_gpt_image2 = (
+            platform == "gpt-image2"
+            and base_url.strip().rstrip('/').lower() == "https://api.bltcy.ai"
+        )
+        if is_bltcy_gpt_image2:
+            api_format = "openai_style"
+        elif platform == "gpt-image2":
+            api_format = "native_style"
+
+        plain_apikey = apikey.strip()
+        has_plain_apikey = bool(plain_apikey and plain_apikey.isascii() and "\u2022" not in plain_apikey)
+
         if custom_model:
             used_model = custom_model
             add_custom_model(platform, custom_model)
+        elif is_bltcy_gpt_image2:
+            used_model = "gpt-image-2"
         else:
             used_model = model
 

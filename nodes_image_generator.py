@@ -10,12 +10,13 @@ from .utils import tensor2pil, pil2tensor
 from .config import get_config, get_current_base_url, API_PATHS
 
 
-IMAGE_RATIOS = ["AUTO", "1:1", "16:9", "9:16", "4:3", "3:4", "21:9"]
+IMAGE_RATIOS = ["AUTO", "auto", "1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "3:2", "2:3"]
 IMAGE_SIZES = ["1K", "2K", "4K"]
 
 PRO_MAX_IMAGES = 14
-FLASH_MAX_IMAGES = 3
-ALL_MAX_IMAGES = PRO_MAX_IMAGES
+FLASH_MAX_IMAGES = 14
+GPT_IMAGE2_MAX_IMAGES = 16
+ALL_MAX_IMAGES = max(PRO_MAX_IMAGES, FLASH_MAX_IMAGES, GPT_IMAGE2_MAX_IMAGES)
 
 
 class RelayImageGenerator:
@@ -115,6 +116,111 @@ class RelayImageGenerator:
     # ══════════════════════════════════════
     #  openai — OpenAI Images 兼容
     # ══════════════════════════════════════
+    def _gpt_image2_size(self, ratio, images):
+        if ratio == "1:1":
+            return "1024x1024"
+        if ratio == "3:2":
+            return "1536x1024"
+        if ratio == "2:3":
+            return "1024x1536"
+        if ratio in ("AUTO", "auto") and images:
+            img = tensor2pil(images[0])[0]
+            width, height = img.size
+            if width > height:
+                return "1536x1024"
+            if height > width:
+                return "1024x1536"
+            return "1024x1024"
+        return "auto"
+
+    def _gpt_image2_generate(self, base_url, api_key, model, prompt, ratio, images, pbar):
+        paths = API_PATHS.get("image_native_style", {})
+        image_size = self._gpt_image2_size(ratio, images)
+        headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
+
+        if images:
+            url = f"{base_url}{paths.get('gpt_image2_edit', '/v1/images/edits')}"
+            data_dict = {
+                "model": model,
+                "prompt": prompt,
+                "size": image_size,
+                "n": "1",
+            }
+            files_list = []
+            for i, img in enumerate(images[:GPT_IMAGE2_MAX_IMAGES]):
+                pbar.update_absolute(15 + i * 2)
+                img_bytes = self._image_to_bytes(img)
+                files_list.append(
+                    ("image", (f"image_{i+1}.png", BytesIO(img_bytes), "image/png"))
+                )
+
+            pbar.update_absolute(40)
+            print(f"[RelayAPI] POST {url} (gpt-image2 edit, {len(files_list)} images, size={image_size})")
+            resp = requests.post(url, headers=headers, data=data_dict,
+                                 files=files_list, timeout=self.timeout)
+        else:
+            url = f"{base_url}{paths.get('gpt_image2_generate', '/v1/images/generations')}"
+            payload = {
+                "model": model,
+                "prompt": prompt,
+                "size": image_size,
+                "n": 1,
+            }
+
+            pbar.update_absolute(40)
+            print(f"[RelayAPI] POST {url} (gpt-image2 create, size={image_size})")
+            resp = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
+
+        pbar.update_absolute(75)
+        print(f"[RelayAPI] -> {resp.status_code}")
+        if resp.status_code != 200:
+            self._err(f"gpt-image2 error: {resp.status_code} - {resp.text[:500]}")
+        return resp.json()
+
+    def _gpt_image2_openai_generate(self, base_url, api_key, model, prompt, ratio, images, pbar):
+        paths = API_PATHS.get("image_openai_style", {})
+        image_size = self._gpt_image2_size(ratio, images)
+        headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
+
+        if images:
+            url = f"{base_url}{paths.get('edit', '/v1/images/edits')}"
+            data_dict = {
+                "model": model,
+                "prompt": prompt,
+                "size": image_size,
+                "n": "1",
+            }
+            files_list = []
+            for i, img in enumerate(images[:GPT_IMAGE2_MAX_IMAGES]):
+                pbar.update_absolute(15 + i * 2)
+                img_bytes = self._image_to_bytes(img)
+                files_list.append(
+                    ("image", (f"image_{i+1}.png", BytesIO(img_bytes), "image/png"))
+                )
+
+            pbar.update_absolute(40)
+            print(f"[RelayAPI] POST {url} (gpt-image2 openai edit, {len(files_list)} images, size={image_size})")
+            resp = requests.post(url, headers=headers, data=data_dict,
+                                 files=files_list, timeout=self.timeout)
+        else:
+            url = f"{base_url}{paths.get('generate', '/v1/images/generations')}"
+            payload = {
+                "model": model,
+                "prompt": prompt,
+                "size": image_size,
+                "n": 1,
+            }
+
+            pbar.update_absolute(40)
+            print(f"[RelayAPI] POST {url} (gpt-image2 openai create, size={image_size})")
+            resp = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
+
+        pbar.update_absolute(75)
+        print(f"[RelayAPI] -> {resp.status_code}")
+        if resp.status_code != 200:
+            self._err(f"gpt-image2 openai error: {resp.status_code} - {resp.text[:500]}")
+        return resp.json()
+
     def _openai_text2img(self, base_url, api_key, model, prompt, ratio, size, seed, pbar):
         paths = API_PATHS.get("image_openai_style", {})
         url = f"{base_url}{paths.get('generate', '/v1/images/generations')}"
@@ -250,7 +356,15 @@ class RelayImageGenerator:
             pbar = comfy.utils.ProgressBar(100)
             pbar.update_absolute(10)
 
-            if api_format == "native_style":
+            if platform == "gpt-image2" and api_format == "openai_style":
+                result = self._gpt_image2_openai_generate(
+                    base_url, api_key, model, prompt, ratio, images, pbar,
+                )
+            elif platform == "gpt-image2":
+                result = self._gpt_image2_generate(
+                    base_url, api_key, model, prompt, ratio, images, pbar,
+                )
+            elif api_format == "native_style":
                 result = self._gemini_generate(
                     base_url, api_key, model, prompt, ratio, size,
                     images, seed, pbar,
