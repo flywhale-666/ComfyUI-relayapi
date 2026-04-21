@@ -209,16 +209,55 @@ class RelayVideoGenerator:
 
         return None
 
+    def _unwrap_payload(self, raw):
+        # 中转站常见返回格式是 {"code":0,"data":{...真实任务字段...}}
+        # 这里把真实任务字段提取出来，供后续状态判定统一读取
+        if not isinstance(raw, dict):
+            return {}
+        data_field = raw.get("data")
+        if isinstance(data_field, dict) and any(
+            k in data_field for k in ("status", "state", "progress", "fail_reason")
+        ):
+            merged = dict(data_field)
+            # 顶层的部分字段也合并进来，避免漏取
+            for k in ("fail_reason", "last_error", "error", "message", "video_url", "url"):
+                if k not in merged and k in raw:
+                    merged[k] = raw[k]
+            return merged
+        return raw
+
+    def _extract_fail_reason(self, payload, raw):
+        # 统一提取失败原因，兼容多种字段命名
+        for src in (payload, raw):
+            if not isinstance(src, dict):
+                continue
+            for key in ("fail_reason", "failReason", "last_error", "message"):
+                val = src.get(key)
+                if isinstance(val, str) and val.strip():
+                    return val
+            err = src.get("error")
+            if isinstance(err, dict):
+                msg = err.get("message") or err.get("msg")
+                if isinstance(msg, str) and msg.strip():
+                    return msg
+            elif isinstance(err, str) and err.strip():
+                return err
+        return ""
+
     def _grok_query(self, base_url, api_key, task_id, api_format="native_style"):
         paths = self._get_paths(api_format)
         url = base_url + paths['grok_query'].format(task_id=task_id)
         resp = requests.get(url, headers=self._headers_auth(api_key), timeout=30)
         if resp.status_code != 200:
-            return None, None, None
-        data = resp.json()
-        status = data.get("status", "unknown")
-        video_url = self._extract_video_url(data)
-        return status, video_url, data
+            # 把 HTTP 错误信息抛出来，让轮询层决定是否终止
+            raise RuntimeError("HTTP " + str(resp.status_code) + ": " + resp.text[:300])
+        raw = resp.json()
+        payload = self._unwrap_payload(raw)
+        status = payload.get("status") or payload.get("state") or "unknown"
+        video_url = self._extract_video_url(payload) or self._extract_video_url(raw)
+        # payload 里带上原始响应，方便失败时提取 reason
+        payload.setdefault("__raw__", raw)
+        return status, video_url, payload
 
     def _veo_actual_size(self, size, ratio):
         if size == "4K":
@@ -294,15 +333,18 @@ class RelayVideoGenerator:
                             headers={"Accept": "application/json", "Authorization": "Bearer " + api_key},
                             timeout=30)
         if resp.status_code != 200:
-            return None, None, None
-        data = resp.json()
-        status = data.get("status", "unknown")
-        video_url = self._extract_video_url(data)
-        return status, video_url, data
+            raise RuntimeError("HTTP " + str(resp.status_code) + ": " + resp.text[:300])
+        raw = resp.json()
+        payload = self._unwrap_payload(raw)
+        status = payload.get("status") or payload.get("state") or "unknown"
+        video_url = self._extract_video_url(payload) or self._extract_video_url(raw)
+        payload.setdefault("__raw__", raw)
+        return status, video_url, payload
 
     def _poll(self, query_fn, base_url, api_key, task_id, pbar):
         max_wait = 600
         start = time.time()
+        consecutive_errors = 0  # 连续 HTTP/解析错误计数，避免无声空转
 
         for attempt in range(200):
             elapsed = time.time() - start
@@ -313,45 +355,61 @@ class RelayVideoGenerator:
 
             try:
                 status, video_url, data = query_fn(base_url, api_key, task_id)
+                consecutive_errors = 0  # 查询成功后重置
                 if status is None:
                     continue
 
                 status_lower = (status or "").lower()
 
-                if "progress" in (data or {}):
-                    progress = data.get("progress", "0%")
+                # 打印每轮的查询结果，方便排查卡死问题
+                progress_raw = (data or {}).get("progress")
+                print("[RelayAPI] poll #" + str(attempt + 1)
+                      + " elapsed=" + str(round(elapsed, 1)) + "s"
+                      + " status=" + str(status)
+                      + " progress=" + str(progress_raw))
+
+                if progress_raw is not None:
                     try:
-                        if isinstance(progress, str) and progress.endswith('%'):
-                            pn = int(progress.rstrip('%'))
-                        elif isinstance(progress, (int, float)):
-                            pn = int(progress)
+                        if isinstance(progress_raw, str) and progress_raw.endswith('%'):
+                            pn = int(progress_raw.rstrip('%'))
+                        elif isinstance(progress_raw, (int, float)):
+                            pn = int(progress_raw)
                         else:
                             pn = 0
                         pbar.update_absolute(min(90, 40 + pn * 50 // 100))
                     except (ValueError, TypeError):
                         pbar.update_absolute(min(80, 40 + attempt * 40 // 200))
 
+                # 失败判定优先，避免某些平台同时带 success/fail 关键字时误判
+                if any(k in status_lower for k in ("fail", "error", "cancel")):
+                    raw = (data or {}).get("__raw__", {})
+                    reason = self._extract_fail_reason(data or {}, raw)
+                    self._err("Task failed: " + (reason or status))
+
                 if any(k in status_lower for k in ("success", "completed", "done", "succeed")):
                     if video_url:
                         return video_url
-                    print("[RelayAPI] Task done but no video URL found: " + json.dumps(data)[:500])
+                    print("[RelayAPI] Task done but no video URL found: " + json.dumps(data, ensure_ascii=False)[:500])
                     continue
 
-                if any(k in status_lower for k in ("fail", "error")):
-                    reason = ""
-                    if data:
-                        reason = (data.get("fail_reason")
-                                  or data.get("last_error")
-                                  or (data.get("error") or {}).get("message", "")
-                                  or "")
-                    self._err("Task failed: " + (reason or status))
-
             except requests.exceptions.Timeout:
-                continue
-            except RuntimeError:
-                raise
-            except Exception:
-                continue
+                consecutive_errors += 1
+            except RuntimeError as e:
+                # 来自 _grok_query/_veo_query 的 HTTP 非 200，或 _err 的失败
+                msg = str(e)
+                if msg.startswith("[RelayAPI]"):
+                    # _err 抛出的终止错误直接上抛
+                    raise
+                consecutive_errors += 1
+                print("[RelayAPI] query error (" + str(consecutive_errors) + "): " + msg)
+            except Exception as e:
+                consecutive_errors += 1
+                print("[RelayAPI] query exception (" + str(consecutive_errors) + "): " + str(e))
+
+            # 连续 6 次（约 30 秒）查询都失败就停止，别再空等到 600 秒
+            if consecutive_errors >= 6:
+                return self._err("Query keeps failing, aborted after "
+                                 + str(round(time.time() - start, 1)) + "s")
 
         return self._err("No result after " + str(round(time.time() - start, 1)) + "s")
 
