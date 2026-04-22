@@ -109,7 +109,7 @@ class RelayImageGenerator:
     CATEGORY = "RelayAPI"
 
     def __init__(self):
-        self.timeout = 120
+        self.timeout = 300
 
     def _err(self, msg):
         full_msg = f"[RelayAPI] {msg}"

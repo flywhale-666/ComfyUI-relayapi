@@ -361,13 +361,7 @@ class RelayVideoGenerator:
 
                 status_lower = (status or "").lower()
 
-                # 打印每轮的查询结果，方便排查卡死问题
                 progress_raw = (data or {}).get("progress")
-                print("[RelayAPI] poll #" + str(attempt + 1)
-                      + " elapsed=" + str(round(elapsed, 1)) + "s"
-                      + " status=" + str(status)
-                      + " progress=" + str(progress_raw))
-
                 if progress_raw is not None:
                     try:
                         if isinstance(progress_raw, str) and progress_raw.endswith('%'):
