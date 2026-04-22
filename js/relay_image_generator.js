@@ -7,7 +7,12 @@ const GPT_IMAGE2_MAX_IMAGES = 16;
 // 顺序与 Python 端 IMAGE_RATIOS 保持一致，保证前后端完全对齐
 const IMAGE_RATIOS = ["auto", "1:1", "2:3", "3:2", "4:3", "3:4", "9:16", "16:9", "9:21", "21:9"];
 const DEFAULT_IMAGE_SIZES = ["1K", "2K", "4K"];
-const GPT_IMAGE2_SIZES = ["1K"];
+const GPT_IMAGE2_SIZES = ["1K", "2K", "4K"];
+const GPT_IMAGE2_DEFAULTS = {
+    size: "2K",
+    quality: "medium",
+    moderation: "low",
+};
 
 function sameValues(a, b) {
     return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => v === b[i]);
@@ -30,6 +35,25 @@ function preserveNodeSize(node, preferred) {
     requestAnimationFrame(() => applyMinSize(node, preferred));
 }
 
+function isWidgetHidden(widget) {
+    return widget?.hidden || widget?.type === "hidden";
+}
+
+function hideWidget(widget) {
+    if (!widget || isWidgetHidden(widget)) return;
+    widget._origType = widget.type;
+    widget._origComputeSize = widget.computeSize;
+    widget.hidden = true;
+    widget.type = "hidden";
+    widget.computeSize = () => [0, 0];
+    if (widget.inputEl) {
+        widget.inputEl.style.display = "none";
+        widget.inputEl.style.visibility = "hidden";
+        widget.inputEl.style.pointerEvents = "none";
+        widget.inputEl.tabIndex = -1;
+    }
+}
+
 function getPlatformFromSource(node) {
     const infoSlot = node.inputs?.find(i => i.name === "info");
     if (!infoSlot || !infoSlot.link) return "banana-pro";
@@ -49,6 +73,25 @@ function hasImageConnected(node) {
         if (/^image\d+$/.test(input.name) && input.link) return true;
     }
     return false;
+}
+
+function applyDeprecatedWidgets(node, preferredSize) {
+    const formatW = node.widgets?.find(w => w.name === "format");
+    if (!formatW) return;
+
+    if (!isWidgetHidden(formatW)) {
+        hideWidget(formatW);
+        preserveNodeSize(node, preferredSize);
+        app.graph.setDirtyCanvas(true);
+    }
+}
+
+function setWidgetValue(node, name, value) {
+    const widget = node.widgets?.find(w => w.name === name);
+    if (!widget || widget.value === value) return false;
+    if (widget.options?.values && !widget.options.values.includes(value)) return false;
+    widget.value = value;
+    return true;
 }
 
 function applyPlatform(node, platform, preferredSize) {
@@ -102,7 +145,7 @@ function applyPlatform(node, platform, preferredSize) {
         const isGpt = platform === "gpt-image2";
         const values = isGpt ? GPT_IMAGE2_SIZES : DEFAULT_IMAGE_SIZES;
         // 各平台的默认档位：gpt-image2 只有 1K；banana-pro / banana-2 默认 2K
-        const defaultSize = isGpt ? "1K" : "2K";
+        const defaultSize = "2K";
         const listChanged = !sameValues(sizeW.options?.values, values);
         if (listChanged) {
             sizeW.options.values = values;
@@ -117,6 +160,12 @@ function applyPlatform(node, platform, preferredSize) {
                 changed = true;
             }
         }
+    }
+
+    if (platform === "gpt-image2") {
+        changed = setWidgetValue(node, "size", GPT_IMAGE2_DEFAULTS.size) || changed;
+        changed = setWidgetValue(node, "quality", GPT_IMAGE2_DEFAULTS.quality) || changed;
+        changed = setWidgetValue(node, "moderation", GPT_IMAGE2_DEFAULTS.moderation) || changed;
     }
 
     if (changed) {
@@ -135,7 +184,9 @@ app.registerExtension({
 
         node._lastPlatform = null;
         node._lastHasImage = null;
-        applyPlatform(node, "banana-pro", Array.isArray(node.size) ? [...node.size] : null);
+        const initialPreferredSize = Array.isArray(node.size) ? [...node.size] : null;
+        applyPlatform(node, "banana-pro", initialPreferredSize);
+        applyDeprecatedWidgets(node, initialPreferredSize);
 
         setInterval(() => {
             const preferredSize = Array.isArray(node.size) ? [...node.size] : null;
@@ -161,6 +212,7 @@ app.registerExtension({
             const hasImg = hasImageConnected(node);
             if (hasImg !== node._lastHasImage) {
                 node._lastHasImage = hasImg;
+                applyDeprecatedWidgets(node, preferredSize);
                 const ratioW = node.widgets?.find(w => w.name === "ratio");
                 if (ratioW) {
                     // 接了参考图默认切 auto（按原图比例出），没接则回 1:1

@@ -13,7 +13,9 @@ const TASK_API_FORMATS = {
     sound: ["native_style", "openai_style"],
 };
 
-const PLATFORM_API_FORMATS = {};
+const PLATFORM_API_FORMATS = {
+    "gpt-image2": ["openai_style"],
+};
 
 app.registerExtension({
     name: "RelayAPI.Settings",

@@ -19,7 +19,7 @@ DEFAULT_MODELS = {
     # image — 通用 fallback
     "banana-pro": ["nano-banana-pro"],
     "banana-2": ["gemini-3.1-flash-image-preview"],
-    "gpt-image2": ["gpt-image-2-all"],
+    "gpt-image2": ["gpt-image-2"],
     "Suno": ["suno_music"],
 }
 
@@ -29,7 +29,6 @@ FORMAT_MODELS = {
         "openai_style": ["nano-banana-pro"],
     },
     "gpt-image2": {
-        "native_style": ["gpt-image-2-all"],
         "openai_style": ["gpt-image-2"],
     },
     "Suno": {
