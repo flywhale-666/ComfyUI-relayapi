@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-relayapi"
 description = "ComfyUI custom nodes for AI video/image generation via API relay stations (supports Grok, Veo, Gemini)"
-version = "1.2.5"
+version = "1.2.6"
 license = {file = "LICENSE"}
 # classifiers = [
 #     "Operating System :: OS Independent",
