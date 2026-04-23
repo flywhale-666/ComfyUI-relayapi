@@ -10,7 +10,7 @@ DEFAULT_API_BASES = [
     "https://api.bltcy.ai",
 ]
 
-TASK_TYPES = ["video", "image", "sound"]
+TASK_TYPES = ["video", "image", "sound", "text"]
 
 DEFAULT_MODELS = {
     # video
@@ -21,6 +21,7 @@ DEFAULT_MODELS = {
     "banana-2": ["gemini-3.1-flash-image-preview"],
     "gpt-image2": ["gpt-image-2"],
     "Suno": ["suno_music"],
+    "GeminiText": ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview"],
 }
 
 FORMAT_MODELS = {
@@ -35,12 +36,16 @@ FORMAT_MODELS = {
         "native_style": ["suno_music"],
         "openai_style": ["suno_music"],
     },
+    "GeminiText": {
+        "native_style": ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview"],
+    },
 }
 
 TASK_PLATFORMS = {
     "video": ["Grok", "Veo"],
     "image": ["banana-pro", "banana-2", "gpt-image2"],
     "sound": ["Suno"],
+    "text": ["GeminiText"],
     "other": [],
 }
 
@@ -49,11 +54,13 @@ PLATFORMS = list(DEFAULT_MODELS.keys())
 VIDEO_API_FORMATS = ["native_style", "openai_style"]
 IMAGE_API_FORMATS = ["native_style", "openai_style"]
 SOUND_API_FORMATS = ["native_style", "openai_style"]
+TEXT_API_FORMATS = ["native_style"]
 
 API_FORMATS_BY_TASK = {
     "video": VIDEO_API_FORMATS,
     "image": IMAGE_API_FORMATS,
     "sound": SOUND_API_FORMATS,
+    "text": TEXT_API_FORMATS,
 }
 
 ALL_API_FORMATS = list(
@@ -94,6 +101,9 @@ API_PATHS = {
     "sound_openai_style": {
         "suno_create": "/suno/submit/music",
         "suno_query": "/suno/fetch/{task_id}",
+    },
+    "text_native_style": {
+        "generate": "/v1beta/models/{model}:generateContent",
     },
 }
 

@@ -5,16 +5,19 @@ const TASK_PLATFORMS = {
     video: ["Grok", "Veo"],
     image: ["banana-pro", "banana-2", "gpt-image2"],
     sound: ["Suno"],
+    text: ["GeminiText"],
 };
 
 const TASK_API_FORMATS = {
     video: ["native_style", "openai_style"],
     image: ["native_style", "openai_style"],
     sound: ["native_style", "openai_style"],
+    text: ["native_style"],
 };
 
 const PLATFORM_API_FORMATS = {
     "gpt-image2": ["openai_style"],
+    "GeminiText": ["native_style"],
 };
 
 app.registerExtension({
