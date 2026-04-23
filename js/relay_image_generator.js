@@ -3,9 +3,18 @@ import { app } from "../../scripts/app.js";
 const PRO_MAX_IMAGES = 14;
 const FLASH_MAX_IMAGES = 14;
 const GPT_IMAGE2_MAX_IMAGES = 16;
-// 统一的比例列表：gpt-image2 / banana-pro / banana-2 都用这一个
-// 顺序与 Python 端 IMAGE_RATIOS 保持一致，保证前后端完全对齐
-const IMAGE_RATIOS = ["auto", "1:1", "2:3", "3:2", "4:3", "3:4", "9:16", "16:9", "9:21", "21:9"];
+// Ratio lists are platform-specific.
+const IMAGE_RATIOS_BASE = ["auto", "1:1", "2:3", "3:2", "4:3", "3:4", "9:16", "16:9", "9:21", "21:9"];
+const IMAGE_RATIOS_EXTREME = ["1:4", "4:1", "1:8", "8:1"];
+const GPT_IMAGE2_EXTRA_RATIOS = ["1:3", "3:1"];
+const BANANA2_RATIOS = IMAGE_RATIOS_BASE.concat(IMAGE_RATIOS_EXTREME);
+const GPT_IMAGE2_RATIOS = IMAGE_RATIOS_BASE.concat(GPT_IMAGE2_EXTRA_RATIOS);
+const IMAGE_RATIOS = IMAGE_RATIOS_BASE.concat(IMAGE_RATIOS_EXTREME, GPT_IMAGE2_EXTRA_RATIOS);
+const IMAGE_RATIOS_BY_PLATFORM = {
+    "banana-pro": IMAGE_RATIOS_BASE,
+    "banana-2": BANANA2_RATIOS,
+    "gpt-image2": GPT_IMAGE2_RATIOS,
+};
 const DEFAULT_IMAGE_SIZES = ["1K", "2K", "4K"];
 const GPT_IMAGE2_SIZES = ["1K", "2K", "4K"];
 const GPT_IMAGE2_DEFAULTS = {
@@ -54,6 +63,23 @@ function hideWidget(widget) {
     }
 }
 
+function showWidget(widget) {
+    if (!widget || !isWidgetHidden(widget)) return;
+    widget.hidden = false;
+    widget.type = widget._origType || "combo";
+    if (widget._origComputeSize) {
+        widget.computeSize = widget._origComputeSize;
+    } else {
+        delete widget.computeSize;
+    }
+    if (widget.inputEl) {
+        widget.inputEl.style.display = "";
+        widget.inputEl.style.visibility = "";
+        widget.inputEl.style.pointerEvents = "";
+        widget.inputEl.tabIndex = 0;
+    }
+}
+
 function getPlatformFromSource(node) {
     const infoSlot = node.inputs?.find(i => i.name === "info");
     if (!infoSlot || !infoSlot.link) return "banana-pro";
@@ -86,6 +112,27 @@ function applyDeprecatedWidgets(node, preferredSize) {
     }
 }
 
+function applyPlatformOnlyWidgets(node, platform) {
+    const showGptOnly = platform === "gpt-image2";
+    let changed = false;
+
+    for (const name of ["quality", "moderation"]) {
+        const widget = node.widgets?.find(w => w.name === name);
+        if (!widget) continue;
+
+        if (showGptOnly && isWidgetHidden(widget)) {
+            showWidget(widget);
+            changed = true;
+        }
+        if (!showGptOnly && !isWidgetHidden(widget)) {
+            hideWidget(widget);
+            changed = true;
+        }
+    }
+
+    return changed;
+}
+
 function setWidgetValue(node, name, value) {
     const widget = node.widgets?.find(w => w.name === name);
     if (!widget || widget.value === value) return false;
@@ -99,6 +146,8 @@ function applyPlatform(node, platform, preferredSize) {
         ? GPT_IMAGE2_MAX_IMAGES
         : (platform === "banana-2" ? FLASH_MAX_IMAGES : PRO_MAX_IMAGES);
     let changed = false;
+
+    changed = applyPlatformOnlyWidgets(node, platform) || changed;
 
     for (const input of node.inputs || []) {
         const m = input.name.match(/^image(\d+)$/);
@@ -128,8 +177,7 @@ function applyPlatform(node, platform, preferredSize) {
 
     const ratioW = node.widgets?.find(w => w.name === "ratio");
     if (ratioW) {
-        // 三个平台共用同一套比例列表（见顶部 IMAGE_RATIOS）
-        const values = IMAGE_RATIOS;
+        const values = IMAGE_RATIOS_BY_PLATFORM[platform] || IMAGE_RATIOS_BASE;
         if (!sameValues(ratioW.options?.values, values)) {
             ratioW.options.values = values;
             changed = true;

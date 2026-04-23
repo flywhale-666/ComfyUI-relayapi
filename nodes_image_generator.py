@@ -58,10 +58,18 @@ def _post_with_timing(label, session_post_kwargs):
     return resp
 
 
-# 统一的比例列表（小写 auto）。三个平台都用这一个列表：
-#   - gpt-image2：按比例和 size 档位映射成具体像素带入
-#   - banana-pro / banana-2：直接把比例字符串当 aspect_ratio / aspectRatio 发
-IMAGE_RATIOS = ["auto", "1:1", "2:3", "3:2", "4:3", "3:4", "9:16", "16:9", "9:21", "21:9"]
+# Platform-specific ratio lists. Banana-2 supports the extra tall/wide ratios.
+IMAGE_RATIOS_BASE = ["auto", "1:1", "2:3", "3:2", "4:3", "3:4", "9:16", "16:9", "9:21", "21:9"]
+IMAGE_RATIOS_EXTREME = ["1:4", "4:1", "1:8", "8:1"]
+GPT_IMAGE2_EXTRA_RATIOS = ["1:3", "3:1"]
+BANANA2_RATIOS = IMAGE_RATIOS_BASE + IMAGE_RATIOS_EXTREME
+GPT_IMAGE2_RATIOS = IMAGE_RATIOS_BASE + GPT_IMAGE2_EXTRA_RATIOS
+IMAGE_RATIOS = IMAGE_RATIOS_BASE + IMAGE_RATIOS_EXTREME + GPT_IMAGE2_EXTRA_RATIOS
+IMAGE_RATIOS_BY_PLATFORM = {
+    "banana-pro": IMAGE_RATIOS_BASE,
+    "banana-2": BANANA2_RATIOS,
+    "gpt-image2": GPT_IMAGE2_RATIOS,
+}
 
 # gpt-image2 尺寸规则：最大边 <= 3840，宽高都是 16 的倍数，总像素 <= 8294400。
 GPT_IMAGE2_RATIO_VALUES = {
@@ -74,6 +82,8 @@ GPT_IMAGE2_RATIO_VALUES = {
     "9:16": 9 / 16,
     "21:9": 21 / 9,
     "9:21": 9 / 21,
+    "1:3":  1 / 3,
+    "3:1":  3 / 1,
 }
 GPT_IMAGE2_1K_RATIO_SIZES = {
     "1:1":  "1248x1248",
@@ -85,6 +95,8 @@ GPT_IMAGE2_1K_RATIO_SIZES = {
     "9:16": "896x1744",
     "21:9": "1904x816",
     "9:21": "816x1904",
+    "1:3":  "720x2160",
+    "3:1":  "2160x720",
 }
 GPT_IMAGE2_SIZE_LONG_EDGE = {
     "2K": 2048,
@@ -232,6 +244,9 @@ class RelayImageGenerator:
     def _multiple_of_16(self, value):
         return max(16, int(value) // 16 * 16)
 
+    def _multiple_of_16_ceil(self, value):
+        return max(16, ((int(value) + 15) // 16) * 16)
+
     def _gpt_image2_size_from_ratio(self, ratio_key, size):
         ratio_value = GPT_IMAGE2_RATIO_VALUES.get(ratio_key)
         if not ratio_value:
@@ -257,8 +272,12 @@ class RelayImageGenerator:
             width *= scale
             height *= scale
 
-        w = self._multiple_of_16(width)
-        h = self._multiple_of_16(height)
+        if ratio_value >= 1:
+            w = self._multiple_of_16(width)
+            h = self._multiple_of_16_ceil(height)
+        else:
+            w = self._multiple_of_16_ceil(width)
+            h = self._multiple_of_16(height)
         while w * h > GPT_IMAGE2_MAX_PIXELS:
             if w >= h:
                 w -= 16
@@ -626,7 +645,8 @@ class RelayImageGenerator:
             if platform == "gpt-image2" and api_format != "openai_style":
                 print(f"[RelayAPI] normalize api_format for gpt-image2: {api_format!r} -> 'openai_style'")
                 api_format = "openai_style"
-            ratio = self._normalize_choice("ratio", ratio, IMAGE_RATIOS, "1:1")
+            allowed_ratios = IMAGE_RATIOS_BY_PLATFORM.get(platform, IMAGE_RATIOS_BASE)
+            ratio = self._normalize_choice("ratio", ratio, allowed_ratios, "1:1")
             size = self._normalize_choice("size", size, IMAGE_SIZES, "2K")
             quality = self._normalize_choice("quality", quality, GPT_IMAGE2_QUALITIES, "medium")
             moderation = self._normalize_choice("moderation", moderation, GPT_IMAGE2_MODERATIONS, "low")
