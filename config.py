@@ -21,7 +21,7 @@ DEFAULT_MODELS = {
     "banana-2": ["gemini-3.1-flash-image-preview"],
     "gpt-image2": ["gpt-image-2"],
     "Suno": ["suno_music"],
-    "GeminiText": ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview"],
+    "GeminiText": ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-3.1-pro-preview"],
 }
 
 FORMAT_MODELS = {
@@ -37,7 +37,7 @@ FORMAT_MODELS = {
         "openai_style": ["suno_music"],
     },
     "GeminiText": {
-        "native_style": ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview"],
+        "native_style": ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-3.1-pro-preview"],
     },
 }
 

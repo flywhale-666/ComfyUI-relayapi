@@ -137,7 +137,7 @@ pip install -r requirements.txt
 
 | 平台 | api_format | 模型 |
 |------|-----------|------|
-| GeminiText | native_style | gemini-3.1-flash-lite-preview / gemini-3-flash-preview |
+| GeminiText | native_style | gemini-3.1-flash-lite-preview / gemini-3-flash-preview / gemini-3.1-pro-preview |
 
 > 当前文本节点使用 inline image 方式上传图片。根据 Gemini 官方文档，这种方式的请求体总大小建议控制在 20MB 内；如果后续需要更多图片或更大的图片，建议改成 Files API 版本。
 

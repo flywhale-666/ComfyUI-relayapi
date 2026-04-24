@@ -11,12 +11,6 @@ from .utils import tensor2pil
 
 
 TEXT_MAX_IMAGES = 8
-TEXT_SUPPORTED_MODELS = {
-    "gemini-3-flash-preview",
-    "gemini-3.1-flash-lite-preview",
-}
-
-
 class RelayTextGenerator:
     @classmethod
     def INPUT_TYPES(cls):
@@ -148,8 +142,8 @@ class RelayTextGenerator:
                 self._err(f"Unsupported text platform: {platform}")
             if api_format != "native_style":
                 self._err(f"Unsupported text api_format: {api_format}")
-            if model not in TEXT_SUPPORTED_MODELS:
-                self._err(f"Unsupported text model: {model or '(empty)'}")
+            if not model:
+                self._err("Model not found. Please set via Relay API Settings node.")
 
             images = []
             for i in range(1, TEXT_MAX_IMAGES + 1):
