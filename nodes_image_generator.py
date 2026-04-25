@@ -98,9 +98,9 @@ GPT_IMAGE2_1K_RATIO_SIZES = {
     "1:3":  "720x2160",
     "3:1":  "2160x720",
 }
-GPT_IMAGE2_SIZE_LONG_EDGE = {
-    "2K": 2048,
-    "4K": 3840,
+GPT_IMAGE2_SIZE_TARGET_PIXELS = {
+    "2K": 4194304,   # 2048 * 2048
+    "4K": 8294400,   # 2880 * 2880 == 3840 * 2160
 }
 IMAGE_SIZES = ["1K", "2K", "4K"]
 GPT_IMAGE2_QUALITIES = ["low", "medium", "high", "auto"]
@@ -247,6 +247,9 @@ class RelayImageGenerator:
     def _multiple_of_16_ceil(self, value):
         return max(16, ((int(value) + 15) // 16) * 16)
 
+    def _multiple_of_16_nearest(self, value):
+        return max(16, int(round(value / 16)) * 16)
+
     def _gpt_image2_size_from_ratio(self, ratio_key, size):
         ratio_value = GPT_IMAGE2_RATIO_VALUES.get(ratio_key)
         if not ratio_value:
@@ -255,30 +258,44 @@ class RelayImageGenerator:
         if size == "1K":
             return GPT_IMAGE2_1K_RATIO_SIZES.get(ratio_key, "auto")
 
-        long_edge = min(
-            GPT_IMAGE2_SIZE_LONG_EDGE.get(size, GPT_IMAGE2_SIZE_LONG_EDGE["2K"]),
-            GPT_IMAGE2_MAX_EDGE,
+        target_pixels = min(
+            GPT_IMAGE2_SIZE_TARGET_PIXELS.get(size, GPT_IMAGE2_SIZE_TARGET_PIXELS["2K"]),
+            GPT_IMAGE2_MAX_PIXELS,
         )
-        if ratio_value >= 1:
-            width = long_edge
-            height = long_edge / ratio_value
-        else:
-            height = long_edge
-            width = long_edge * ratio_value
+        width = (target_pixels * ratio_value) ** 0.5
+        height = (target_pixels / ratio_value) ** 0.5
 
-        area = width * height
-        if area > GPT_IMAGE2_MAX_PIXELS:
-            scale = (GPT_IMAGE2_MAX_PIXELS / area) ** 0.5
+        scale = min(GPT_IMAGE2_MAX_EDGE / max(width, height), 1.0)
+        if scale < 1.0:
             width *= scale
             height *= scale
 
-        if ratio_value >= 1:
-            w = self._multiple_of_16(width)
-            h = self._multiple_of_16_ceil(height)
-        else:
-            w = self._multiple_of_16_ceil(width)
-            h = self._multiple_of_16(height)
-        while w * h > GPT_IMAGE2_MAX_PIXELS:
+        base_w = self._multiple_of_16_nearest(width)
+        base_h = self._multiple_of_16_nearest(height)
+        best = None
+        for dw in range(-16, 17):
+            for dh in range(-16, 17):
+                w = base_w + dw * 16
+                h = base_h + dh * 16
+                if w < 16 or h < 16:
+                    continue
+                if w > GPT_IMAGE2_MAX_EDGE or h > GPT_IMAGE2_MAX_EDGE:
+                    continue
+                area = w * h
+                if area > target_pixels or area > GPT_IMAGE2_MAX_PIXELS:
+                    continue
+                area_gap = (target_pixels - area) / target_pixels
+                ratio_gap = abs((w / h) - ratio_value) / ratio_value
+                score = area_gap + ratio_gap
+                if best is None or score < best[0]:
+                    best = (score, w, h)
+
+        if best is not None:
+            return f"{best[1]}x{best[2]}"
+
+        w = self._multiple_of_16(width)
+        h = self._multiple_of_16(height)
+        while w * h > target_pixels or w * h > GPT_IMAGE2_MAX_PIXELS:
             if w >= h:
                 w -= 16
             else:
