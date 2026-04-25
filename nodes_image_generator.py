@@ -197,7 +197,7 @@ class RelayImageGenerator:
     # ══════════════════════════════════════
     def _gemini_generate(self, base_url, api_key, model, prompt, ratio, size,
                          images, seed, pbar):
-        paths = API_PATHS.get("image_native_style", {})
+        paths = API_PATHS.get("image_gemini_style", {})
         path_tpl = paths.get("generate", "/v1beta/models/{model}:generateContent")
         url = f"{base_url}{path_tpl.format(model=model)}"
         timeout = self._banana_timeout(size)
@@ -311,7 +311,7 @@ class RelayImageGenerator:
 
     def _gpt_image2_generate(self, base_url, api_key, model, prompt, ratio, size,
                              quality, moderation, images, pbar):
-        paths = API_PATHS.get("image_native_style", {})
+        paths = API_PATHS.get("image_gemini_style", {})
         image_size = self._gpt_image2_size(ratio, size, images)
         timeout = self._gpt_image2_timeout(size)
         headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
@@ -378,7 +378,7 @@ class RelayImageGenerator:
 
     def _gpt_image2_openai_generate(self, base_url, api_key, model, prompt, ratio, size,
                                     quality, moderation, images, pbar):
-        paths = API_PATHS.get("image_openai_style", {})
+        paths = API_PATHS.get("image_relay_api_style", {})
         image_size = self._gpt_image2_size(ratio, size, images)
         timeout = self._gpt_image2_timeout(size)
         headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
@@ -440,7 +440,7 @@ class RelayImageGenerator:
         return resp.json()
 
     def _openai_text2img(self, base_url, api_key, model, prompt, ratio, size, seed, pbar):
-        paths = API_PATHS.get("image_openai_style", {})
+        paths = API_PATHS.get("image_relay_api_style", {})
         url = f"{base_url}{paths.get('generate', '/v1/images/generations')}"
         timeout = self._banana_timeout(size)
 
@@ -468,7 +468,7 @@ class RelayImageGenerator:
 
     def _openai_edit(self, base_url, api_key, model, prompt, ratio, size,
                      images, seed, pbar):
-        paths = API_PATHS.get("image_openai_style", {})
+        paths = API_PATHS.get("image_relay_api_style", {})
         url = f"{base_url}{paths.get('edit', '/v1/images/edits')}"
         timeout = self._banana_timeout(size)
 
@@ -640,11 +640,13 @@ class RelayImageGenerator:
             raw_base = parsed.get("api_base", "")
             base_url = raw_base.strip().rstrip('/') if raw_base.strip() else get_current_base_url()
             model = parsed.get("model", "")
-            api_format = parsed.get("api_format", "openai_style")
+            api_format = parsed.get("api_format", "relay_api_style")
             platform = parsed.get("platform", "banana-pro")
-            if platform == "gpt-image2" and api_format != "openai_style":
-                print(f"[RelayAPI] normalize api_format for gpt-image2: {api_format!r} -> 'openai_style'")
-                api_format = "openai_style"
+            if platform == "gpt-image2" and api_format != "relay_api_style":
+                print(f"[RelayAPI] normalize api_format for gpt-image2: {api_format!r} -> 'relay_api_style'")
+                api_format = "relay_api_style"
+            if api_format not in {"gemini_style", "relay_api_style"}:
+                self._err(f"Unsupported image api_format: {api_format}")
             allowed_ratios = IMAGE_RATIOS_BY_PLATFORM.get(platform, IMAGE_RATIOS_BASE)
             ratio = self._normalize_choice("ratio", ratio, allowed_ratios, "1:1")
             size = self._normalize_choice("size", size, IMAGE_SIZES, "2K")
@@ -669,7 +671,7 @@ class RelayImageGenerator:
                     base_url, api_key, model, prompt, ratio, size, quality, moderation,
                     images, pbar,
                 )
-            elif api_format == "native_style":
+            elif api_format == "gemini_style":
                 result = self._gemini_generate(
                     base_url, api_key, model, prompt, ratio, size,
                     images, seed, pbar,

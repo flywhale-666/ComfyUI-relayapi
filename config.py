@@ -10,34 +10,41 @@ DEFAULT_API_BASES = [
     "https://api.bltcy.ai",
 ]
 
-TASK_TYPES = ["video", "image", "sound", "text"]
+TASK_TYPES = ["image", "video", "sound", "text"]
 
 DEFAULT_MODELS = {
     # video
     "Grok": ["grok-video-3"],
-    "Veo": ["veo3.1-fast", "veo3.1", "veo_3_1-lite", "veo_3_1-lite-4K"],
+    "Veo": ["veo3.1", "veo3.1-fast"],
     # image — 通用 fallback
     "banana-pro": ["nano-banana-pro"],
     "banana-2": ["gemini-3.1-flash-image-preview"],
     "gpt-image2": ["gpt-image-2"],
     "Suno": ["suno_music"],
     "GeminiText": ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-3.1-pro-preview"],
+    "OpenaiText": ["claude-opus-4-6"],
 }
 
 FORMAT_MODELS = {
+    "Veo": {
+        "relay_v1_style": ["veo3.1", "veo3.1-fast"],
+        "relay_v2_style": ["veo3.1", "veo3.1-fast"],
+    },
     "banana-pro": {
-        "native_style": ["gemini-3-pro-image-preview"],
-        "openai_style": ["nano-banana-pro"],
+        "gemini_style": ["gemini-3-pro-image-preview"],
+        "relay_api_style": ["nano-banana-pro"],
     },
     "gpt-image2": {
-        "openai_style": ["gpt-image-2"],
+        "relay_api_style": ["gpt-image-2"],
     },
     "Suno": {
-        "native_style": ["suno_music"],
-        "openai_style": ["suno_music"],
+        "relay_api_style": ["suno_music"],
     },
     "GeminiText": {
-        "native_style": ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-3.1-pro-preview"],
+        "gemini_style": ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-3.1-pro-preview"],
+    },
+    "OpenaiText": {
+        "openai_style": ["claude-opus-4-6"],
     },
 }
 
@@ -45,16 +52,16 @@ TASK_PLATFORMS = {
     "video": ["Grok", "Veo"],
     "image": ["banana-pro", "banana-2", "gpt-image2"],
     "sound": ["Suno"],
-    "text": ["GeminiText"],
+    "text": ["GeminiText", "OpenaiText"],
     "other": [],
 }
 
 PLATFORMS = list(DEFAULT_MODELS.keys())
 
-VIDEO_API_FORMATS = ["native_style", "openai_style"]
-IMAGE_API_FORMATS = ["native_style", "openai_style"]
-SOUND_API_FORMATS = ["native_style", "openai_style"]
-TEXT_API_FORMATS = ["native_style"]
+VIDEO_API_FORMATS = ["relay_v1_style", "relay_v2_style"]
+IMAGE_API_FORMATS = ["gemini_style", "relay_api_style"]
+SOUND_API_FORMATS = ["relay_api_style"]
+TEXT_API_FORMATS = ["gemini_style", "openai_style"]
 
 API_FORMATS_BY_TASK = {
     "video": VIDEO_API_FORMATS,
@@ -72,38 +79,38 @@ ALL_API_FORMATS = list(
 )
 
 API_PATHS = {
-    "video_native_style": {
+    "video_relay_v1_style": {
         "grok_create": "/v1/video/create",
         "grok_query": "/v1/video/query?id={task_id}",
-        "veo_create": "/v1/video/create",
-        "veo_query": "/v1/video/query?id={task_id}",
+        "veo_create": "/v1/videos",
+        "veo_query": "/v1/videos/{task_id}",
+        "veo_content": "/v1/videos/{task_id}/content",
     },
-    "video_openai_style": {
+    "video_relay_v2_style": {
         "grok_create": "/v2/videos/generations",
         "grok_query": "/v2/videos/generations/{task_id}",
         "veo_create": "/v2/videos/generations",
         "veo_query": "/v2/videos/generations/{task_id}",
     },
-    "image_native_style": {
+    "image_gemini_style": {
         "generate": "/v1beta/models/{model}:generateContent",
         "edit": "/v1beta/models/{model}:generateContent",
         "gpt_image2_generate": "/v1/images/generations",
         "gpt_image2_edit": "/v1/images/edits",
     },
-    "image_openai_style": {
+    "image_relay_api_style": {
         "generate": "/v1/images/generations",
         "edit": "/v1/images/edits",
     },
-    "sound_native_style": {
-        "suno_create": "/suno/generate",
-        "suno_query": "/suno/fetch/{task_id}",
-    },
-    "sound_openai_style": {
+    "sound_relay_api_style": {
         "suno_create": "/suno/submit/music",
         "suno_query": "/suno/fetch/{task_id}",
     },
-    "text_native_style": {
+    "text_gemini_style": {
         "generate": "/v1beta/models/{model}:generateContent",
+    },
+    "text_openai_style": {
+        "chat": "/v1/chat/completions",
     },
 }
 
@@ -212,6 +219,12 @@ def get_model_list(platform, api_format=None):
         defaults = DEFAULT_MODELS.get(platform, [])
 
     all_models = [m for m in defaults if m not in removed_models]
+    if isinstance(custom_models, dict):
+        merged = []
+        for fmt_models in custom_models.values():
+            if isinstance(fmt_models, list):
+                merged.extend(fmt_models)
+        custom_models = merged
     for m in custom_models:
         m = m.strip()
         if m and m not in all_models:
@@ -230,7 +243,7 @@ def add_custom_model(platform, model):
     config = get_config()
     custom_models = config.get('custom_models', {})
     removed_models = config.get('removed_models', {})
-    if platform not in custom_models:
+    if platform not in custom_models or not isinstance(custom_models[platform], list):
         custom_models[platform] = []
     if platform in removed_models and model in removed_models[platform]:
         removed_models[platform].remove(model)
@@ -251,7 +264,7 @@ def remove_model(platform, model):
     config = get_config()
     custom_models = config.get('custom_models', {})
     removed_models = config.get('removed_models', {})
-    if platform in custom_models and model in custom_models[platform]:
+    if platform in custom_models and isinstance(custom_models[platform], list) and model in custom_models[platform]:
         custom_models[platform].remove(model)
         config['custom_models'] = custom_models
     defaults = DEFAULT_MODELS.get(platform, [])
@@ -326,18 +339,20 @@ def register_routes():
     async def model_add(request):
         data = await request.json()
         platform = data.get("platform", "Grok")
+        api_format = data.get("api_format", "")
         model = data.get("model", "")
         if model.strip():
             add_custom_model(platform, model)
-            return web.json_response({"success": True, "list": get_model_list(platform)})
+            return web.json_response({"success": True, "list": get_model_list(platform, api_format or None)})
         return web.json_response({"success": False, "message": "Model is empty"}, status=400)
 
     @PromptServer.instance.routes.post("/relayapi/models/remove")
     async def model_remove(request):
         data = await request.json()
         platform = data.get("platform", "Grok")
+        api_format = data.get("api_format", "")
         model = data.get("model", "")
         if model.strip():
             remove_model(platform, model)
-            return web.json_response({"success": True, "list": get_model_list(platform)})
+            return web.json_response({"success": True, "list": get_model_list(platform, api_format or None)})
         return web.json_response({"success": False, "message": "Model is empty"}, status=400)

@@ -2,22 +2,22 @@ import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 
 const TASK_PLATFORMS = {
-    video: ["Grok", "Veo"],
     image: ["banana-pro", "banana-2", "gpt-image2"],
+    video: ["Grok", "Veo"],
     sound: ["Suno"],
-    text: ["GeminiText"],
+    text: ["GeminiText", "OpenaiText"],
 };
 
 const TASK_API_FORMATS = {
-    video: ["native_style", "openai_style"],
-    image: ["native_style", "openai_style"],
-    sound: ["native_style", "openai_style"],
-    text: ["native_style"],
+    image: ["gemini_style", "relay_api_style"],
+    video: ["relay_v1_style", "relay_v2_style"],
+    sound: ["relay_api_style"],
+    text: ["gemini_style", "openai_style"],
 };
 
 const PLATFORM_API_FORMATS = {
-    "gpt-image2": ["openai_style"],
-    "GeminiText": ["native_style"],
+    "gpt-image2": ["relay_api_style"],
+    "OpenaiText": ["openai_style"],
 };
 
 app.registerExtension({

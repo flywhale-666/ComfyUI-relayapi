@@ -5,10 +5,10 @@ const VEO_ONLY_WIDGETS = ["enhance_prompt", "enable_HD"];
 const GROK_RATIOS = ["AUTO", "16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3"];
 const VEO_RATIOS = ["16:9", "9:16"];
 
-const GROK_SIZES = ["720P", "480P"];
+const GROK_SIZES = ["720P", "1080P"];
 const VEO_SIZES = ["720P", "1080P", "4K"];
 
-const GROK_DURATIONS = ["6", "10"];
+const GROK_DURATIONS = ["6", "10", "15", "30"];
 const VEO_DURATIONS = ["4", "6", "8"];
 
 const GROK_MAX_IMAGES = 7;

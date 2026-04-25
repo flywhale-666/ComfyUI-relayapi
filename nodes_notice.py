@@ -1,8 +1,11 @@
 class RelayAPINotice:
     MESSAGE = (
-        "api_format： 请参考中转平台的API文档，可选以下两种\n"
-        "       native_style 指中转平台自有格式。\n"
-        "       openai_style 指中转平台兼容 OPENAI格式。\n"
+        "api_format： 请参考中转平台的API文档，基本都是2选1，如果碰到不能用，切换一下就可以了。\n"
+        "       图像：gemini_style 指谷歌原生格式。\n"
+        "       图像：relay_api_style 指中转站的格式。\n"
+        "       视频和声音：relay_V1_V2_style 指不同中转站的格式。\n"
+        "       文本：gemini_style 指谷歌原生格式。\n"
+        "       文本：openai_style 指OPENAI的格式。\n"
         "添加模型：在 custom_model 填入新模型名\n"
         "添加 baseurl：在 custom_api_base 填入新地址\n"
         "删除模型或 baseurl：\n"

@@ -24,18 +24,8 @@ SOUND_VERSION_MODEL_MAP_OPENAI = {
     "V5": "chirp-crow",
     "V5.5": "chirp-fenix",
 }
-SOUND_VERSION_MODEL_MAP_NATIVE = {
-    "V3": "chirp-v3-0",
-    "V3.5": "chirp-v3-5",
-    "V4": "chirp-v4",
-    "V4.5": "chirp-auk",
-    "V4.5+": "chirp-auk",
-    "V5": "chirp-v5",
-    "V5.5": "chirp-v5",
-}
 SOUND_SETTINGS_MODEL_BY_FORMAT = {
-    "native_style": "suno_music",
-    "openai_style": "suno_music",
+    "relay_api_style": "suno_music",
 }
 
 
@@ -126,11 +116,9 @@ class RelaySoundGenerator:
 
     def _get_paths(self, api_format):
         key = f"sound_{api_format}"
-        return API_PATHS.get(key, API_PATHS["sound_openai_style"])
+        return API_PATHS.get(key, API_PATHS["sound_relay_api_style"])
 
     def _get_version_model(self, api_format, version):
-        if api_format == "native_style":
-            return SOUND_VERSION_MODEL_MAP_NATIVE.get(version, "chirp-v5")
         return SOUND_VERSION_MODEL_MAP_OPENAI.get(version, "chirp-crow")
 
     def _extract_task_id(self, result):
@@ -151,48 +139,6 @@ class RelaySoundGenerator:
                 return nested_task_id.strip()
 
         return ""
-
-    def _build_native_payload(
-        self,
-        generation_mode,
-        version_model,
-        title,
-        tags,
-        prompt,
-        make_instrumental,
-        continue_clip_id,
-        continue_at,
-    ):
-        cleaned_title = title.strip()
-        cleaned_tags = tags.strip()
-        cleaned_prompt = prompt.strip()
-        cleaned_clip_id = continue_clip_id.strip()
-
-        if generation_mode == MODE_DESCRIPTION:
-            payload = {
-                "gpt_description_prompt": cleaned_prompt,
-                "mv": version_model,
-                "prompt": "",
-            }
-            if make_instrumental:
-                payload["make_instrumental"] = True
-            if cleaned_title:
-                payload["title"] = cleaned_title
-            if cleaned_tags:
-                payload["tags"] = cleaned_tags
-            return payload
-
-        payload = {
-            "prompt": "" if make_instrumental else cleaned_prompt,
-            "mv": version_model,
-            "title": cleaned_title,
-            "tags": cleaned_tags,
-        }
-        if cleaned_clip_id:
-            payload["continue_clip_id"] = cleaned_clip_id
-            payload["continue_at"] = max(0, int(float(continue_at)))
-            payload["task"] = "extend"
-        return payload
 
     def _build_openai_payload(
         self,
@@ -261,29 +207,17 @@ class RelaySoundGenerator:
         paths = self._get_paths(api_format)
         url = base_url + paths.get("suno_create", "/suno/submit/music")
 
-        if api_format == "native_style":
-            payload = self._build_native_payload(
-                generation_mode=generation_mode,
-                version_model=version_model,
-                title=title,
-                tags=tags,
-                prompt=prompt,
-                make_instrumental=make_instrumental,
-                continue_clip_id=continue_clip_id,
-                continue_at=continue_at,
-            )
-        else:
-            payload = self._build_openai_payload(
-                generation_mode=generation_mode,
-                version_model=version_model,
-                title=title,
-                tags=tags,
-                prompt=prompt,
-                make_instrumental=make_instrumental,
-                negative_tags=negative_tags,
-                continue_clip_id=continue_clip_id,
-                continue_at=continue_at,
-            )
+        payload = self._build_openai_payload(
+            generation_mode=generation_mode,
+            version_model=version_model,
+            title=title,
+            tags=tags,
+            prompt=prompt,
+            make_instrumental=make_instrumental,
+            negative_tags=negative_tags,
+            continue_clip_id=continue_clip_id,
+            continue_at=continue_at,
+        )
 
         pbar.update_absolute(30)
         print(f"[RelayAPI] POST {url} (Suno, {api_format}, {generation_mode})")
@@ -469,7 +403,7 @@ class RelaySoundGenerator:
             base_url = raw_base.strip().rstrip("/") if raw_base.strip() else get_current_base_url()
             platform = (parsed.get("platform") or "Suno").strip()
             settings_model = (parsed.get("model") or "").strip()
-            api_format = (parsed.get("api_format") or "native_style").strip()
+            api_format = (parsed.get("api_format") or "relay_api_style").strip()
             task_type = (parsed.get("task_type") or "sound").strip()
             version_model = self._get_version_model(api_format, version)
 
@@ -477,7 +411,7 @@ class RelaySoundGenerator:
                 self._err("Relay API Settings task_type must be sound.")
             if platform != "Suno":
                 self._err(f"Unsupported sound platform: {platform}")
-            if api_format not in {"native_style", "openai_style"}:
+            if api_format != "relay_api_style":
                 self._err(f"Unsupported sound api_format: {api_format}")
 
             expected_settings_model = SOUND_SETTINGS_MODEL_BY_FORMAT.get(api_format, "")

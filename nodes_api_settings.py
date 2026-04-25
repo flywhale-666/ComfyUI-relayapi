@@ -3,7 +3,7 @@ from .config import (
     get_config, get_api_base_list,
     add_custom_api_base, add_custom_model,
     set_current_base_url, get_node_api_key, save_node_settings,
-    PLATFORMS, TASK_TYPES, ALL_API_FORMATS, DEFAULT_MODELS, FORMAT_MODELS,
+    PLATFORMS, TASK_TYPES, TASK_PLATFORMS, API_FORMATS_BY_TASK, DEFAULT_MODELS, FORMAT_MODELS,
 )
 
 
@@ -22,10 +22,17 @@ def _all_models():
     config = get_config()
     custom_models = config.get('custom_models', {})
     for plat_models in custom_models.values():
-        for m in plat_models:
-            m = m.strip()
-            if m and m not in seen:
-                seen.append(m)
+        if isinstance(plat_models, dict):
+            model_groups = plat_models.values()
+        else:
+            model_groups = [plat_models]
+        for models in model_groups:
+            if not isinstance(models, list):
+                continue
+            for m in models:
+                m = m.strip()
+                if m and m not in seen:
+                    seen.append(m)
     return seen if seen else [""]
 
 
@@ -34,11 +41,14 @@ class RelayAPISettings:
     def INPUT_TYPES(cls):
         api_base_list = get_api_base_list()
         all_models = _all_models()
+        default_task = TASK_TYPES[0]
+        default_platforms = TASK_PLATFORMS.get(default_task) or PLATFORMS
+        default_formats = API_FORMATS_BY_TASK.get(default_task) or [""]
         return {
             "required": {
-                "task_type": (TASK_TYPES, {"default": "video"}),
-                "platform": (PLATFORMS, {"default": PLATFORMS[0]}),
-                "api_format": (ALL_API_FORMATS, {"default": "native_style"}),
+                "task_type": (TASK_TYPES, {"default": default_task}),
+                "platform": (PLATFORMS, {"default": default_platforms[0]}),
+                "api_format": (default_formats, {"default": default_formats[0]}),
                 "api_base": (api_base_list, {"default": api_base_list[0]}),
                 "model": (all_models, {"default": all_models[0]}),
                 "apikey": ("STRING", {"default": ""}),
@@ -85,9 +95,9 @@ class RelayAPISettings:
 
         # api_format 由用户手动选择，不再根据 base_url 自动覆盖
         if platform == "gpt-image2":
+            api_format = "relay_api_style"
+        elif platform == "OpenaiText":
             api_format = "openai_style"
-        elif platform == "GeminiText":
-            api_format = "native_style"
 
         plain_apikey = apikey.strip()
         has_plain_apikey = bool(plain_apikey and plain_apikey.isascii() and "\u2022" not in plain_apikey)

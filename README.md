@@ -1,167 +1,260 @@
 # ComfyUI-relayapi
 
-通过 API 中转站（Relay Station）调用主流 AI 生成服务的 ComfyUI 自定义节点包，支持 **视频生成**、**图像生成** 和 **文本/视觉理解**。
+ComfyUI 自定义节点包，用于通过中转站 API 调用文本、图像、视频和音乐生成服务。
 
-## 功能概览
+## 节点
 
-| 节点 | 说明 |
-|------|------|
-| **Relay API Settings** | 统一配置 API 中转站地址、密钥、平台和模型 |
-| **Relay Video Generator** | 通过中转站生成视频（支持 Grok / Veo 平台） |
-| **Relay Image Generator** | 通过中转站生成或编辑图像（支持 banana-pro / banana-2 / gpt-image2 平台） |
-| **Relay Text Generator** | 通过中转站调用 Gemini 文本/视觉理解模型，输出文本结果 |
+| 节点 | 用途 |
+| --- | --- |
+| Relay API Settings | 统一配置任务类型、平台、API 格式、中转站地址、模型和密钥 |
+| Relay Text Generator | 文本生成和多图视觉理解 |
+| Relay Image Generator | 文生图和图像编辑 |
+| Relay Video Generator | Grok / Veo 视频生成 |
+| Relay Sound Generator | Suno 音乐生成 |
 
 ## 安装
 
-将本仓库克隆或复制到 ComfyUI 的 `custom_nodes` 目录下：
+放到 ComfyUI 的 `custom_nodes` 目录：
 
-```
+```text
 ComfyUI/custom_nodes/ComfyUI-relayapi/
 ```
 
-安装依赖：
+重启 ComfyUI 后，在 `RelayAPI` 分类下使用节点。
 
-```bash
-pip install -r requirements.txt
+## Relay API Settings
+
+Settings 节点通过 `info` 输出把配置传给下游生成节点。
+
+| 参数 | 说明 |
+| --- | --- |
+| `task_type` | `image` / `video` / `sound` / `text` |
+| `platform` | 随任务类型切换 |
+| `api_format` | 随任务类型和平台切换 |
+| `api_base` | 中转站地址 |
+| `model` | 当前平台和格式可用的模型 |
+| `apikey` | API Key，本地保存并在界面遮盖显示 |
+| `custom_api_base` | 输入新地址添加；输入 `delete:地址` 删除 |
+| `custom_model` | 输入新模型添加；输入 `delete:模型名` 删除 |
+
+内置地址：
+
+```text
+https://www.taikuaila.cn
+https://ai.t8star.cn
+https://api.bltcy.ai
 ```
 
-> 如果你使用的是 ComfyUI 便携版（Embedded Python），大部分依赖已经预装，一般无需额外安装。
+注意：API Key 要和 `api_base` 对应，不要把 BLT 的 key 发到太快啦，或反过来。
 
-重启 ComfyUI 即可在节点菜单的 **RelayAPI** 分类下找到所有节点。
+## API 格式
 
-## 节点说明
+| 任务 | 格式 |
+| --- | --- |
+| image | `gemini_style` / `relay_api_style` |
+| video | `relay_v1_style` / `relay_v2_style` |
+| sound | `relay_api_style` |
+| text | `gemini_style` / `openai_style` |
 
-### Relay API Settings
+## 文本
 
-所有生成器节点的前置配置节点，通过 `info` 输出口将配置传递给下游节点。
+平台：
 
-| 参数 | 说明 |
-|------|------|
-| **task_type** | 任务类型：`video`、`image`、`sound`、`text`、`other` |
-| **platform** | 平台选择，跟随 task_type 自动切换。视频：`Grok` / `Veo`；图像：`banana-pro` / `banana-2` / `gpt-image2`；文本：`GeminiText` |
-| **api_format** | API 协议格式：`native_style`（平台原生风格）/ `openai_style`（OpenAI 兼容风格）。其中 `GeminiText` 仅支持 `native_style`，`gpt-image2` 仅支持 `openai_style` |
-| **api_base** | 中转站地址，支持下拉选择或通过 `custom_api_base` 手动添加 |
-| **model** | 模型名称，跟随平台和格式自动刷新，也可通过 `custom_model` 手动添加 |
-| **apikey** | API 密钥，输入后自动保存到本地配置文件，界面上以部分遮盖形式显示（前后各保留 6 位） |
+| platform | api_format | 模型 |
+| --- | --- | --- |
+| GeminiText | `gemini_style` | `gemini-3.1-flash-lite-preview` / `gemini-3-flash-preview` / `gemini-3.1-pro-preview` |
+| OpenaiText | `openai_style` | `claude-opus-4-6`，以及用户自定义模型 |
 
-**管理地址和模型：**
-- 在 `custom_api_base` 中输入新地址后回车即可添加到下拉列表
-- 输入 `delete:地址` 可删除对应地址
-- `custom_model` 的添加和删除方式相同
+`OpenaiText` 只允许 `openai_style`。
 
----
-
-### Relay Video Generator
-
-通过中转站调用 Grok 或 Veo 平台生成视频。
+输入：
 
 | 参数 | 说明 |
-|------|------|
-| **prompt** | 视频描述提示词 |
-| **ratio** | 宽高比。Grok 支持 `AUTO`、`16:9`、`9:16`、`1:1` 等；Veo 支持 `16:9`、`9:16` |
-| **size** | 分辨率。Grok：`720P` / `480P`；Veo：`720P` / `1080P` |
-| **duration** | 视频时长（秒）。Grok：`6` / `10`；Veo：`4` / `6` / `8` |
-| **image1~7** | 可选参考图片输入（Grok 最多 7 张，Veo 最多 3 张） |
-| **seed** | 随机种子，支持 ComfyUI 的 `control_after_generate` |
+| --- | --- |
+| `prompt` | 文本提示词 |
+| `image1` ~ `image8` | 可选图片输入 |
+| `seed` | 用于 ComfyUI 重跑控制 |
 
-**输出：**
-- `video` — 生成的视频
-- `task_id` — 任务 ID
-- `response` — API 返回的完整响应（JSON）
-- `video_url` — 视频下载链接
+输出：
 
-> 连接参考图片时，ratio 会自动切换为 `AUTO`；未连接图片时默认 `16:9`。
+| 输出 | 说明 |
+| --- | --- |
+| `text` | 提取后的纯文本结果 |
+| `response` | 精简 JSON，只保留 `code`、`text`、`platform`、`api_format`、`model`、耗时、用量等字段 |
 
-![视频生成示例](assets/screenshot_video.png)
+`response` 不再输出 Gemini 原始 `candidates` 和 `thoughtSignature`，避免展示节点被长串内容卡住。
 
----
+## 图像
 
-### Relay Image Generator
+平台和模型：
 
-通过中转站调用 Gemini 模型生成或编辑图像。
+| platform | api_format | 模型 |
+| --- | --- | --- |
+| banana-pro | `gemini_style` | `gemini-3-pro-image-preview` |
+| banana-pro | `relay_api_style` | `nano-banana-pro` |
+| banana-2 | `gemini_style` / `relay_api_style` | `gemini-3.1-flash-image-preview` |
+| gpt-image2 | `relay_api_style` | `gpt-image-2` |
 
-- **未连接图片** → 文生图模式
-- **连接图片** → 图像编辑模式
+图像接口：
+
+| api_format | 端点 |
+| --- | --- |
+| `gemini_style` | `/v1beta/models/{model}:generateContent` |
+| `relay_api_style` | `/v1/images/generations` 或 `/v1/images/edits` |
+
+输入：
 
 | 参数 | 说明 |
-|------|------|
-| **prompt** | 图像描述或编辑指令 |
-| **ratio** | 宽高比，默认 `1:1`（无图时）或 `AUTO`（有图时） |
-| **size** | 输出尺寸：`1K` / `2K` / `4K`，默认 `2K` |
-| **image1~16** | 可选输入图片（banana-pro 最多 14 张，banana-2 最多 14 张，gpt-image2 最多 16 张） |
-| **quality / moderation** | 仅 `gpt-image2` 显示；banana-pro / banana-2 不显示 |
-| **seed** | 随机种子，支持 ComfyUI 的 `control_after_generate` |
+| --- | --- |
+| `prompt` | 文生图提示词或编辑指令 |
+| `ratio` | 画面比例 |
+| `size` | `1K` / `2K` / `4K` |
+| `image1` ~ `image16` | 可选参考图或编辑图 |
+| `quality` / `moderation` | 主要用于 `gpt-image2` |
 
-> `banana-pro` 的 `ratio` 下拉仅显示基础比例：`auto` / `1:1` / `2:3` / `3:2` / `4:3` / `3:4` / `9:16` / `16:9` / `9:21` / `21:9`。  
-> `banana-2` 额外显示：`1:4` / `4:1` / `1:8` / `8:1`。  
-> `gpt-image2` 额外显示：`1:3` / `3:1`。  
-> `gpt-image2` 的 `1K` 固定尺寸映射包含：`1:1 -> 1248x1248`、`3:2 -> 1536x1024`、`2:3 -> 1024x1536`、`4:3 -> 1440x1072`、`3:4 -> 1072x1440`、`16:9 -> 1744x896`、`9:16 -> 896x1744`、`21:9 -> 1904x816`、`9:21 -> 816x1904`、`1:3 -> 720x2160`、`3:1 -> 2160x720`。
+输出：
 
-**输出：**
-- `image` — 生成的图像
-- `response` — API 返回的完整响应（JSON）
-- `image_url` — 图像下载链接
-
-**平台与模型对应关系：**
-
-| 平台 | api_format | 模型 |
-|------|-----------|------|
-| banana-pro | native_style | gemini-3-pro-image-preview |
-| banana-pro | openai_style | nano-banana-pro |
-| banana-2 | native_style / openai_style | gemini-3.1-flash-image-preview |
-| gpt-image2 | native_style | gpt-image-2-all |
-| gpt-image2 | openai_style | gpt-image-2 |
+| 输出 | 说明 |
+| --- | --- |
+| `image` | 生成图片 |
+| `response` | 结果 JSON |
+| `image_url` | 图片 URL，若接口返回 |
 
 ![图像生成示例](assets/screenshot_image.png)
 
----
+## 视频
 
-### Relay Text Generator
+平台：
 
-通过中转站调用 Gemini 文本/视觉理解模型，输出文本结果。
+| platform | 说明 |
+| --- | --- |
+| Grok | Grok 视频 |
+| Veo | Veo 视频 |
 
-- **未连接图片** → 纯文本生成 / 改写 / 反推提示词
-- **连接图片** → 多图理解 + 提示词联合分析
+格式区别：
+
+| api_format | 主要用途 | 创建 | 查询 |
+| --- | --- | --- | --- |
+| `relay_v1_style` | 太快啦一类 V1 接口 | Grok: `/v1/video/create`；Veo: `/v1/videos` | Grok: `/v1/video/query?id={task_id}`；Veo: `/v1/videos/{task_id}` |
+| `relay_v2_style` | BLT/柏拉图一类 V2 接口 | `/v2/videos/generations` | `/v2/videos/generations/{task_id}` |
+
+Veo V1 如查询完成但没有直接返回视频 URL，会尝试从：
+
+```text
+/v1/videos/{task_id}/content
+```
+
+下载视频。
+
+模型：
+
+| platform | api_format | 模型 |
+| --- | --- | --- |
+| Grok | `relay_v1_style` / `relay_v2_style` | `grok-video-3` |
+| Veo | `relay_v1_style` / `relay_v2_style` | `veo3.1` / `veo3.1-fast` |
+
+Grok 参数：
+
+| 参数 | 支持值 |
+| --- | --- |
+| `size` | `720P` / `1080P` |
+| `duration` | `6` / `10` / `15` / `30` |
+| `ratio` | `AUTO` / `16:9` / `9:16` / `1:1` / `4:3` / `3:4` / `3:2` / `2:3` |
+
+Veo 参数：
+
+| 参数 | 支持值 |
+| --- | --- |
+| `size` | `720P` / `1080P` / `4K` |
+| `duration` | `4` / `6` / `8` |
+| `ratio` | `16:9` / `9:16` |
+
+输出：
+
+| 输出 | 说明 |
+| --- | --- |
+| `video` | 下载到本地临时目录后加载的视频 |
+| `task_id` | 任务 ID |
+| `response` | 精简结果 JSON，包含 URL、平台、格式和脱敏后的请求 payload |
+| `video_url` | 视频 URL |
+
+视频 `response` 中的图片 base64 会被省略成长度提示，避免展示节点卡死。
+
+![视频生成示例](assets/screenshot_video.png)
+
+## 声音
+
+Suno 现在只保留一个格式：
+
+```text
+relay_api_style
+```
+
+端点：
+
+```text
+POST /suno/submit/music
+GET  /suno/fetch/{task_id}
+```
+
+版本映射：
+
+| 版本 | mv |
+| --- | --- |
+| V3 | `chirp-v3.0` |
+| V3.5 | `chirp-v3.5` |
+| V4 | `chirp-v4` |
+| V4.5 | `chirp-auk` |
+| V4.5+ | `chirp-bluejay` |
+| V5 | `chirp-crow` |
+| V5.5 | `chirp-fenix` |
+
+输入：
 
 | 参数 | 说明 |
-|------|------|
-| **prompt** | 文本提示词，可直接让模型总结、分析、改写或反推所需文本 |
-| **image1~8** | 可选输入图片，最多 8 张，会与 `prompt` 一起发送给 Gemini 原生 `generateContent` |
-| **seed** | 用于 ComfyUI 工作流复跑控制，支持 `control_after_generate` |
+| --- | --- |
+| `generation_mode` | 描述模式或歌词定制模式 |
+| `title` / `tags` / `prompt` | 歌曲标题、风格和提示词 |
+| `make_instrumental` | 是否纯音乐 |
+| `negative_tags` | 不想要的风格 |
+| `continue_clip_id` / `continue_at` | 续写参数 |
 
-**输出：**
-- `text` — 提取出的文本结果
-- `response` — API 返回的完整响应（JSON）
-
-**平台与模型对应关系：**
-
-| 平台 | api_format | 模型 |
-|------|-----------|------|
-| GeminiText | native_style | gemini-3.1-flash-lite-preview / gemini-3-flash-preview / gemini-3.1-pro-preview |
-
-> 当前文本节点使用 inline image 方式上传图片。根据 Gemini 官方文档，这种方式的请求体总大小建议控制在 20MB 内；如果后续需要更多图片或更大的图片，建议改成 Files API 版本。
-
----
+Suno 接口可能一次返回两首歌。当前节点的 `audio` 输出只取一个最佳 clip；完整列表仍在 `response.query` 里。
 
 ## 错误处理
 
-所有 API 错误（HTTP 状态码异常、任务失败、超时等）都会输出到 `response` 端口，格式为：
+节点失败时，`response` 输出：
 
 ```json
-{"code": "error", "message": "错误详情..."}
+{"code": "error", "message": "错误详情"}
 ```
 
-下游节点不会因为上游生成失败而崩溃（使用 `ExecutionBlocker` 机制）。
+如果接口返回空内容或非 JSON，视频节点会显示具体接口、HTTP 状态码和返回内容片段，方便判断是 key、base_url、端点还是服务端问题。
+
+常见问题：
+
+| 现象 | 原因 |
+| --- | --- |
+| `Expecting value: line 1 column 1` | 接口返回空内容或非 JSON。通常是 `api_base` 和 key 混用，或端点不匹配 |
+| `PUBLIC_ERROR_UNSAFE_GENERATION` | 视频生成被安全过滤 |
+| Grok 选择 1080P 但结果仍为 720 | 请求已传 `resolution: 1080p`，若结果仍低分辨率，通常是中转站或模型通道忽略该档位 |
 
 ## 配置文件
 
-插件会在自身目录下生成 `relay_config.json`，用于持久化保存：
+本地配置保存到：
+
+```text
+relay_config.json
+```
+
+保存内容包括：
+
 - 自定义中转站地址
 - 自定义模型
-- API 密钥（加密存储于本地，不会上传）
+- 节点级 API Key 和 base_url
 
-内置地址包含 `https://www.taikuaila.cn`、`https://ai.t8star.cn`、`https://api.bltcy.ai`。`gpt-image2` 在 taikuaila 使用 `native_style` / `gpt-image-2-all`，在 bltcy 使用 `openai_style` / `gpt-image-2`。
+不要把含真实 API Key 的 `relay_config.json` 提交到公开仓库。
 
-## 许可
+## License
 
-本项目采用 [MIT License](LICENSE)。
+[MIT License](LICENSE)
