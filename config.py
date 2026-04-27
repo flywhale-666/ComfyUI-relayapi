@@ -14,8 +14,8 @@ TASK_TYPES = ["image", "video", "sound", "text"]
 
 DEFAULT_MODELS = {
     # video
-    "Grok": ["grok-video-3"],
-    "Veo": ["veo3.1", "veo3.1-fast"],
+    "Grok": ["grok-video-3", "grok-videos"],
+    "Veo": ["veo3.1", "veo3.1-fast", "veo_3_1-lite", "veo_3_1-lite-4K", "veo_3_1-fast-4K"],
     # image — 通用 fallback
     "banana-pro": ["nano-banana-pro"],
     "banana-2": ["gemini-3.1-flash-image-preview"],
@@ -27,8 +27,9 @@ DEFAULT_MODELS = {
 
 FORMAT_MODELS = {
     "Veo": {
-        "relay_v1_style": ["veo3.1", "veo3.1-fast"],
-        "relay_v2_style": ["veo3.1", "veo3.1-fast"],
+        "relay_v1_style": ["veo3.1", "veo3.1-fast", "veo_3_1-lite", "veo_3_1-lite-4K", "veo_3_1-fast-4K"],
+        "relay_v1cheap_style": ["veo3.1", "veo3.1-fast", "veo_3_1-lite", "veo_3_1-lite-4K", "veo_3_1-fast-4K"],
+        "relay_v2_style": ["veo3.1", "veo3.1-fast", "veo_3_1-lite", "veo_3_1-lite-4K", "veo_3_1-fast-4K"],
     },
     "banana-pro": {
         "gemini_style": ["gemini-3-pro-image-preview"],
@@ -58,7 +59,7 @@ TASK_PLATFORMS = {
 
 PLATFORMS = list(DEFAULT_MODELS.keys())
 
-VIDEO_API_FORMATS = ["relay_v1_style", "relay_v2_style"]
+VIDEO_API_FORMATS = ["relay_v1_style", "relay_v1cheap_style", "relay_v2_style"]
 IMAGE_API_FORMATS = ["gemini_style", "relay_api_style"]
 SOUND_API_FORMATS = ["relay_api_style"]
 TEXT_API_FORMATS = ["gemini_style", "openai_style"]
@@ -82,6 +83,14 @@ API_PATHS = {
     "video_relay_v1_style": {
         "grok_create": "/v1/video/create",
         "grok_query": "/v1/video/query?id={task_id}",
+        "veo_create": "/v1/videos",
+        "veo_query": "/v1/videos/{task_id}",
+        "veo_content": "/v1/videos/{task_id}/content",
+    },
+    "video_relay_v1cheap_style": {
+        "grok_create": "/v1/videos",
+        "grok_query": "/v1/videos/{task_id}",
+        "grok_content": "/v1/videos/{task_id}/content",
         "veo_create": "/v1/videos",
         "veo_query": "/v1/videos/{task_id}",
         "veo_content": "/v1/videos/{task_id}/content",

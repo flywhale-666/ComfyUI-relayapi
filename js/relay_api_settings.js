@@ -10,7 +10,7 @@ const TASK_PLATFORMS = {
 
 const TASK_API_FORMATS = {
     image: ["gemini_style", "relay_api_style"],
-    video: ["relay_v1_style", "relay_v2_style"],
+    video: ["relay_v1_style", "relay_v1cheap_style", "relay_v2_style"],
     sound: ["relay_api_style"],
     text: ["gemini_style", "openai_style"],
 };

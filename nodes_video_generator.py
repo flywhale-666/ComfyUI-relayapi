@@ -41,7 +41,7 @@ GROK_SIZES = ["720P", "1080P"]
 GROK_DURATIONS = ["6", "10", "15", "30"]
 
 VEO_RATIOS = ["16:9", "9:16"]
-VEO_SIZES = ["720P", "1080P", "4K"]
+VEO_SIZES = ["720P", "1080P"]
 VEO_DURATIONS = ["4", "6", "8"]
 VEO_ENHANCE = ["true", "false"]
 VEO_UPSAMPLE = ["true", "false"]
@@ -174,6 +174,9 @@ class RelayVideoGenerator:
             payload["aspect_ratio"] = ratio
             payload["ratio"] = ratio
 
+        if api_format == "relay_v1cheap_style":
+            payload["size"] = ratio if ratio and ratio != "AUTO" else "16:9"
+
         if images:
             b64_list = []
             for i, img in enumerate(images):
@@ -188,6 +191,8 @@ class RelayVideoGenerator:
                 payload["image"] = b64_list[0]
                 if len(b64_list) > 1:
                     payload["images"] = b64_list
+            elif api_format == "relay_v1cheap_style":
+                payload["input_reference"] = b64_list[0]
             else:
                 payload["images"] = b64_list
                 if len(b64_list) == 1:
@@ -287,13 +292,16 @@ class RelayVideoGenerator:
         payload = self._unwrap_payload(raw)
         status = payload.get("status") or payload.get("state") or "unknown"
         video_url = self._extract_video_url(payload) or self._extract_video_url(raw)
+        if api_format == "relay_v1cheap_style" and not video_url:
+            status_lower = str(status or "").lower()
+            if any(k in status_lower for k in ("success", "completed", "done", "succeed")):
+                content_path = paths.get("grok_content", "/v1/videos/{task_id}/content")
+                video_url = base_url + content_path.format(task_id=task_id)
         # payload 里带上原始响应，方便失败时提取 reason
         payload.setdefault("__raw__", raw)
         return status, video_url, payload
 
     def _veo_actual_size(self, size, ratio):
-        if size == "4K":
-            return "4K"
         vertical = ratio == "9:16"
         if size == "1080P":
             return "1080x1920" if vertical else "1920x1080"
@@ -305,10 +313,8 @@ class RelayVideoGenerator:
 
         model_has_4k = model and "4k" in model.lower()
 
-        if model_has_4k:
+        if model_has_4k or size == "4K":
             actual_size = None
-        elif size == "4K":
-            actual_size = "4K"
         else:
             actual_size = self._veo_actual_size(size, ratio)
 
@@ -323,15 +329,60 @@ class RelayVideoGenerator:
             "ratio": ratio,
             "enhance_prompt": _to_bool(enhance_prompt),
             "enable_upsample": _to_bool(enable_HD),
+            "watermark": False,
         }
         if actual_size is not None:
             payload["size"] = actual_size
+
+        if api_format == "relay_v1cheap_style":
+            if model_has_4k or size == "4K":
+                cheap_size = None
+            else:
+                cheap_size = self._veo_actual_size(size, ratio)
+            data = {
+                "model": model,
+                "prompt": prompt,
+                "seconds": str(duration),
+                "watermark": "false",
+            }
+            if cheap_size is not None:
+                data["size"] = cheap_size
+
+            files = {}
+            if images:
+                image_bytes = self._image_to_bytes(images[0])
+                if not image_bytes:
+                    return self._err("Failed to convert image 1.")
+                files["input_reference"] = ("input_reference.png", image_bytes, "image/png")
+
+            pbar.update_absolute(30)
+            url = base_url + paths['veo_create']
+            print("[RelayAPI] POST " + url + " (Veo OpenAI video cheap, size=" + str(cheap_size) + ")")
+            resp = requests.post(
+                url,
+                headers=self._headers_auth(api_key),
+                data=data,
+                files=files or None,
+                timeout=self.timeout,
+            )
+            print("[RelayAPI] -> " + str(resp.status_code))
+            if resp.status_code != 200:
+                self._err("Veo create error: " + str(resp.status_code) + " - " + resp.text[:500])
+
+            result = self._response_json(resp, "Veo create " + url)
+            task_id = result.get("task_id") or result.get("id") or result.get("request_id")
+            if not task_id:
+                self._err("No task ID returned: " + json.dumps(result)[:300])
+
+            print("[RelayAPI] Veo task: " + task_id)
+            return task_id, data
 
         if api_format == "relay_v1_style":
             data = {
                 "model": model,
                 "prompt": prompt,
                 "seconds": str(duration),
+                "watermark": "false",
             }
             if actual_size is not None:
                 data["size"] = actual_size
@@ -418,7 +469,7 @@ class RelayVideoGenerator:
         payload = self._unwrap_payload(raw)
         status = payload.get("status") or payload.get("state") or "unknown"
         video_url = self._extract_video_url(payload) or self._extract_video_url(raw)
-        if api_format == "relay_v1_style" and not video_url:
+        if api_format in {"relay_v1_style", "relay_v1cheap_style"} and not video_url:
             status_lower = str(status or "").lower()
             if any(k in status_lower for k in ("success", "completed", "done", "succeed")):
                 content_path = paths.get("veo_content", "/v1/videos/{task_id}/content")
@@ -516,7 +567,7 @@ class RelayVideoGenerator:
             platform = (parsed.get("platform") or "Grok").strip()
             model = parsed.get("model", "")
             api_format = parsed.get("api_format", "relay_v1_style")
-            if api_format not in {"relay_v1_style", "relay_v2_style"}:
+            if api_format not in {"relay_v1_style", "relay_v1cheap_style", "relay_v2_style"}:
                 self._err("Unsupported video api_format: " + api_format)
             print("[RelayAPI] " + platform + " | " + api_format + " | " + base_url + " | " + model)
             images = [img for img in [image1, image2, image3, image4, image5, image6, image7] if img is not None]

@@ -52,7 +52,7 @@ https://api.bltcy.ai
 | 任务 | 格式 |
 | --- | --- |
 | image | `gemini_style` / `relay_api_style` |
-| video | `relay_v1_style` / `relay_v2_style` |
+| video | `relay_v1_style` / `relay_v1cheap_style` / `relay_v2_style` |
 | sound | `relay_api_style` |
 | text | `gemini_style` / `openai_style` |
 
@@ -136,6 +136,7 @@ https://api.bltcy.ai
 | api_format | 主要用途 | 创建 | 查询 |
 | --- | --- | --- | --- |
 | `relay_v1_style` | 太快啦一类 V1 接口 | Grok: `/v1/video/create`；Veo: `/v1/videos` | Grok: `/v1/video/query?id={task_id}`；Veo: `/v1/videos/{task_id}` |
+| `relay_v1cheap_style` | V1 低价 OpenAI 视频格式 | `/v1/videos` | `/v1/videos/{task_id}` |
 | `relay_v2_style` | BLT/柏拉图一类 V2 接口 | `/v2/videos/generations` | `/v2/videos/generations/{task_id}` |
 
 Veo V1 如查询完成但没有直接返回视频 URL，会尝试从：
@@ -150,8 +151,8 @@ Veo V1 如查询完成但没有直接返回视频 URL，会尝试从：
 
 | platform | api_format | 模型 |
 | --- | --- | --- |
-| Grok | `relay_v1_style` / `relay_v2_style` | `grok-video-3` |
-| Veo | `relay_v1_style` / `relay_v2_style` | `veo3.1` / `veo3.1-fast` |
+| Grok | `relay_v1_style` / `relay_v1cheap_style` / `relay_v2_style` | `grok-video-3` / `grok-videos` |
+| Veo | `relay_v1_style` / `relay_v1cheap_style` / `relay_v2_style` | `veo3.1` / `veo3.1-fast` / `veo_3_1-lite` / `veo_3_1-lite-4K` / `veo_3_1-fast-4K` |
 
 Grok 参数：
 
@@ -165,7 +166,7 @@ Veo 参数：
 
 | 参数 | 支持值 |
 | --- | --- |
-| `size` | `720P` / `1080P` / `4K` |
+| `size` | `720P` / `1080P`。4K 由 `*-4K` 模型名决定，不再作为 `size` 传入 |
 | `duration` | `4` / `6` / `8` |
 | `ratio` | `16:9` / `9:16` |
 
