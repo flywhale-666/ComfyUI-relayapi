@@ -6,7 +6,7 @@ const GROK_RATIOS = ["AUTO", "16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3"];
 const VEO_RATIOS = ["16:9", "9:16"];
 
 const GROK_SIZES = ["720P", "1080P"];
-const VEO_SIZES = ["720P", "1080P", "4K"];
+const VEO_SIZES = ["720P", "1080P"];
 
 const GROK_DURATIONS = ["6", "10", "15", "30"];
 const VEO_DURATIONS = ["4", "6", "8"];
