@@ -197,7 +197,7 @@ class RelayImageGenerator:
     # ══════════════════════════════════════
     def _gemini_generate(self, base_url, api_key, model, prompt, ratio, size,
                          images, seed, pbar):
-        paths = API_PATHS.get("image_gemini_style", {})
+        paths = API_PATHS.get("image_v1beta/models", {})
         path_tpl = paths.get("generate", "/v1beta/models/{model}:generateContent")
         url = f"{base_url}{path_tpl.format(model=model)}"
         timeout = self._banana_timeout(size)
@@ -328,7 +328,7 @@ class RelayImageGenerator:
 
     def _gpt_image2_generate(self, base_url, api_key, model, prompt, ratio, size,
                              quality, moderation, images, pbar):
-        paths = API_PATHS.get("image_gemini_style", {})
+        paths = API_PATHS.get("image_v1/images", {})
         image_size = self._gpt_image2_size(ratio, size, images)
         timeout = self._gpt_image2_timeout(size)
         headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
@@ -395,7 +395,7 @@ class RelayImageGenerator:
 
     def _gpt_image2_openai_generate(self, base_url, api_key, model, prompt, ratio, size,
                                     quality, moderation, images, pbar):
-        paths = API_PATHS.get("image_relay_api_style", {})
+        paths = API_PATHS.get("image_v1/images", {})
         image_size = self._gpt_image2_size(ratio, size, images)
         timeout = self._gpt_image2_timeout(size)
         headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
@@ -457,7 +457,7 @@ class RelayImageGenerator:
         return resp.json()
 
     def _openai_text2img(self, base_url, api_key, model, prompt, ratio, size, seed, pbar):
-        paths = API_PATHS.get("image_relay_api_style", {})
+        paths = API_PATHS.get("image_v1/images", {})
         url = f"{base_url}{paths.get('generate', '/v1/images/generations')}"
         timeout = self._banana_timeout(size)
 
@@ -470,9 +470,6 @@ class RelayImageGenerator:
         }
         if ratio and ratio != "auto":
             payload["aspect_ratio"] = ratio
-        if seed > 0:
-            payload["seed"] = seed
-
         pbar.update_absolute(40)
         print(f"[RelayAPI] POST {url} (OpenAI text2img, timeout={timeout}s)")
         headers = {"Authorization": f"Bearer {api_key}"}
@@ -483,9 +480,49 @@ class RelayImageGenerator:
             self._err(f"Image create error: {resp.status_code} - {resp.text[:500]}")
         return resp.json()
 
+    def _openai_chat_image(self, base_url, api_key, model, prompt, ratio, size,
+                           images, seed, pbar):
+        paths = API_PATHS.get("image_v1/chat/completions", {})
+        url = f"{base_url}{paths.get('chat', '/v1/chat/completions')}"
+        timeout = self._banana_timeout(size)
+
+        chat_prompt = prompt
+        if ratio and ratio != "auto":
+            chat_prompt = (
+                f"请生成宽高比为 {ratio} 的图片，严格保持这个画面比例。\n"
+                + prompt.lstrip()
+            )
+
+        content = [{"type": "text", "text": chat_prompt}]
+        for i, img in enumerate(images):
+            pbar.update_absolute(15 + i * 2)
+            b64 = self._image_to_base64(img)
+            uri = f"data:image/png;base64,{b64}" if b64 else ""
+            if not uri:
+                self._err(f"Failed to convert image {i + 1}.")
+            content.append({"type": "image_url", "image_url": {"url": uri}})
+
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": content}],
+            "modalities": ["text", "image"],
+            "stream": False,
+            "max_tokens": 4096,
+            "n": 1,
+        }
+        pbar.update_absolute(40)
+        print(f"[RelayAPI] POST {url} (OpenAI chat image, {len(images)} images, timeout={timeout}s)")
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
+        pbar.update_absolute(75)
+        print(f"[RelayAPI] -> {resp.status_code}")
+        if resp.status_code != 200:
+            self._err(f"Image chat error: {resp.status_code} - {resp.text[:500]}")
+        return resp.json()
+
     def _openai_edit(self, base_url, api_key, model, prompt, ratio, size,
                      images, seed, pbar):
-        paths = API_PATHS.get("image_relay_api_style", {})
+        paths = API_PATHS.get("image_v1/images", {})
         url = f"{base_url}{paths.get('edit', '/v1/images/edits')}"
         timeout = self._banana_timeout(size)
 
@@ -498,9 +535,6 @@ class RelayImageGenerator:
         }
         if ratio and ratio != "auto":
             data_dict["aspect_ratio"] = ratio
-        if seed > 0:
-            data_dict["seed"] = str(seed)
-
         files_list = []
         for i, img in enumerate(images):
             pbar.update_absolute(15 + i * 2)
@@ -562,6 +596,19 @@ class RelayImageGenerator:
         choices = result.get("choices", [])
         for c in choices:
             content = (c.get("message") or {}).get("content", "")
+            if isinstance(content, list):
+                parts = []
+                for item in content:
+                    if not isinstance(item, dict):
+                        continue
+                    if isinstance(item.get("text"), str):
+                        parts.append(item["text"])
+                    image_url = item.get("image_url")
+                    if isinstance(image_url, dict) and isinstance(image_url.get("url"), str):
+                        parts.append(image_url["url"])
+                    elif isinstance(image_url, str):
+                        parts.append(image_url)
+                content = "\n".join(parts)
             if not isinstance(content, str) or not content:
                 continue
             import re
@@ -657,12 +704,11 @@ class RelayImageGenerator:
             raw_base = parsed.get("api_base", "")
             base_url = raw_base.strip().rstrip('/') if raw_base.strip() else get_current_base_url()
             model = parsed.get("model", "")
-            api_format = parsed.get("api_format", "relay_api_style")
+            api_format = parsed.get("api_format", "v1/images")
             platform = parsed.get("platform", "banana-pro")
-            if platform == "gpt-image2" and api_format != "relay_api_style":
-                print(f"[RelayAPI] normalize api_format for gpt-image2: {api_format!r} -> 'relay_api_style'")
-                api_format = "relay_api_style"
-            if api_format not in {"gemini_style", "relay_api_style"}:
+            if platform == "gpt-image2" and api_format != "v1/images":
+                self._err("gpt-image2 only supports v1/images.")
+            if api_format not in {"v1beta/models", "v1/chat/completions", "v1/images"}:
                 self._err(f"Unsupported image api_format: {api_format}")
             allowed_ratios = IMAGE_RATIOS_BY_PLATFORM.get(platform, IMAGE_RATIOS_BASE)
             ratio = self._normalize_choice("ratio", ratio, allowed_ratios, "1:1")
@@ -688,8 +734,13 @@ class RelayImageGenerator:
                     base_url, api_key, model, prompt, ratio, size, quality, moderation,
                     images, pbar,
                 )
-            elif api_format == "gemini_style":
+            elif api_format == "v1beta/models":
                 result = self._gemini_generate(
+                    base_url, api_key, model, prompt, ratio, size,
+                    images, seed, pbar,
+                )
+            elif api_format == "v1/chat/completions":
+                result = self._openai_chat_image(
                     base_url, api_key, model, prompt, ratio, size,
                     images, seed, pbar,
                 )

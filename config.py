@@ -27,25 +27,31 @@ DEFAULT_MODELS = {
 
 FORMAT_MODELS = {
     "Veo": {
-        "relay_v1_style": ["veo3.1", "veo3.1-fast", "veo_3_1-lite", "veo_3_1-lite-4K", "veo_3_1-fast-4K"],
-        "relay_v1cheap_style": ["veo3.1", "veo3.1-fast", "veo_3_1-lite", "veo_3_1-lite-4K", "veo_3_1-fast-4K"],
-        "relay_v2_style": ["veo3.1", "veo3.1-fast", "veo_3_1-lite", "veo_3_1-lite-4K", "veo_3_1-fast-4K"],
+        "v1/video": ["veo3.1", "veo3.1-fast", "veo_3_1-lite", "veo_3_1-lite-4K", "veo_3_1-fast-4K"],
+        "v1/videos": ["veo3.1", "veo3.1-fast", "veo_3_1-lite", "veo_3_1-lite-4K", "veo_3_1-fast-4K"],
+        "v2/videos": ["veo3.1", "veo3.1-fast", "veo_3_1-lite", "veo_3_1-lite-4K", "veo_3_1-fast-4K"],
     },
     "banana-pro": {
-        "gemini_style": ["gemini-3-pro-image-preview"],
-        "relay_api_style": ["nano-banana-pro"],
+        "v1beta/models": ["gemini-3-pro-image-preview"],
+        "v1/images": ["nano-banana-pro"],
+        "v1/chat/completions": ["gemini-3-pro-image-preview"],
+    },
+    "banana-2": {
+        "v1beta/models": ["gemini-3.1-flash-image-preview"],
+        "v1/chat/completions": ["gemini-3.1-flash-image-preview"],
     },
     "gpt-image2": {
-        "relay_api_style": ["gpt-image-2"],
+        "v1/images": ["gpt-image-2"],
     },
     "Suno": {
-        "relay_api_style": ["suno_music"],
+        "suno/submit": ["suno_music"],
     },
     "GeminiText": {
-        "gemini_style": ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-3.1-pro-preview"],
+        "v1beta/models": ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-3.1-pro-preview"],
+        "v1/chat/completions": ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-3.1-pro-preview"],
     },
     "OpenaiText": {
-        "openai_style": ["claude-opus-4-6", "grok-4.1"],
+        "v1/chat/completions": ["claude-opus-4-6", "grok-4.1"],
     },
 }
 
@@ -59,10 +65,10 @@ TASK_PLATFORMS = {
 
 PLATFORMS = list(DEFAULT_MODELS.keys())
 
-VIDEO_API_FORMATS = ["relay_v1_style", "relay_v1cheap_style", "relay_v2_style"]
-IMAGE_API_FORMATS = ["gemini_style", "relay_api_style"]
-SOUND_API_FORMATS = ["relay_api_style"]
-TEXT_API_FORMATS = ["gemini_style", "openai_style"]
+VIDEO_API_FORMATS = ["v1/video", "v1/videos", "v2/videos"]
+IMAGE_API_FORMATS = ["v1beta/models", "v1/images", "v1/chat/completions"]
+SOUND_API_FORMATS = ["suno/submit"]
+TEXT_API_FORMATS = ["v1beta/models", "v1/chat/completions"]
 
 API_FORMATS_BY_TASK = {
     "video": VIDEO_API_FORMATS,
@@ -80,14 +86,13 @@ ALL_API_FORMATS = list(
 )
 
 API_PATHS = {
-    "video_relay_v1_style": {
+    "video_v1/video": {
         "grok_create": "/v1/video/create",
         "grok_query": "/v1/video/query?id={task_id}",
-        "veo_create": "/v1/videos",
-        "veo_query": "/v1/videos/{task_id}",
-        "veo_content": "/v1/videos/{task_id}/content",
+        "veo_create": "/v1/video/create",
+        "veo_query": "/v1/video/query?id={task_id}",
     },
-    "video_relay_v1cheap_style": {
+    "video_v1/videos": {
         "grok_create": "/v1/videos",
         "grok_query": "/v1/videos/{task_id}",
         "grok_content": "/v1/videos/{task_id}/content",
@@ -95,30 +100,33 @@ API_PATHS = {
         "veo_query": "/v1/videos/{task_id}",
         "veo_content": "/v1/videos/{task_id}/content",
     },
-    "video_relay_v2_style": {
+    "video_v2/videos": {
         "grok_create": "/v2/videos/generations",
         "grok_query": "/v2/videos/generations/{task_id}",
         "veo_create": "/v2/videos/generations",
         "veo_query": "/v2/videos/generations/{task_id}",
     },
-    "image_gemini_style": {
+    "image_v1beta/models": {
         "generate": "/v1beta/models/{model}:generateContent",
         "edit": "/v1beta/models/{model}:generateContent",
+    },
+    "image_v1/chat/completions": {
+        "chat": "/v1/chat/completions",
+    },
+    "image_v1/images": {
+        "generate": "/v1/images/generations",
+        "edit": "/v1/images/edits",
         "gpt_image2_generate": "/v1/images/generations",
         "gpt_image2_edit": "/v1/images/edits",
     },
-    "image_relay_api_style": {
-        "generate": "/v1/images/generations",
-        "edit": "/v1/images/edits",
-    },
-    "sound_relay_api_style": {
+    "sound_suno/submit": {
         "suno_create": "/suno/submit/music",
         "suno_query": "/suno/fetch/{task_id}",
     },
-    "text_gemini_style": {
+    "text_v1beta/models": {
         "generate": "/v1beta/models/{model}:generateContent",
     },
-    "text_openai_style": {
+    "text_v1/chat/completions": {
         "chat": "/v1/chat/completions",
     },
 }

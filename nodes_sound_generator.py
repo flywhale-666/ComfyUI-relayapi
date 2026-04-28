@@ -25,7 +25,7 @@ SOUND_VERSION_MODEL_MAP_OPENAI = {
     "V5.5": "chirp-fenix",
 }
 SOUND_SETTINGS_MODEL_BY_FORMAT = {
-    "relay_api_style": "suno_music",
+    "suno/submit": "suno_music",
 }
 
 
@@ -116,7 +116,7 @@ class RelaySoundGenerator:
 
     def _get_paths(self, api_format):
         key = f"sound_{api_format}"
-        return API_PATHS.get(key, API_PATHS["sound_relay_api_style"])
+        return API_PATHS.get(key, API_PATHS["sound_suno/submit"])
 
     def _get_version_model(self, api_format, version):
         return SOUND_VERSION_MODEL_MAP_OPENAI.get(version, "chirp-crow")
@@ -403,7 +403,7 @@ class RelaySoundGenerator:
             base_url = raw_base.strip().rstrip("/") if raw_base.strip() else get_current_base_url()
             platform = (parsed.get("platform") or "Suno").strip()
             settings_model = (parsed.get("model") or "").strip()
-            api_format = (parsed.get("api_format") or "relay_api_style").strip()
+            api_format = (parsed.get("api_format") or "suno/submit").strip()
             task_type = (parsed.get("task_type") or "sound").strip()
             version_model = self._get_version_model(api_format, version)
 
@@ -411,7 +411,7 @@ class RelaySoundGenerator:
                 self._err("Relay API Settings task_type must be sound.")
             if platform != "Suno":
                 self._err(f"Unsupported sound platform: {platform}")
-            if api_format != "relay_api_style":
+            if api_format != "suno/submit":
                 self._err(f"Unsupported sound api_format: {api_format}")
 
             expected_settings_model = SOUND_SETTINGS_MODEL_BY_FORMAT.get(api_format, "")

@@ -2,7 +2,7 @@ import { app } from "../../scripts/app.js";
 
 const VEO_ONLY_WIDGETS = ["enhance_prompt", "enable_HD"];
 
-const GROK_RATIOS = ["AUTO", "16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3"];
+const GROK_RATIOS = ["auto", "16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3"];
 const VEO_RATIOS = ["16:9", "9:16"];
 
 const GROK_SIZES = ["720P", "1080P"];
@@ -10,6 +10,10 @@ const VEO_SIZES = ["720P", "1080P"];
 
 const GROK_DURATIONS = ["6", "10", "15", "30"];
 const VEO_DURATIONS = ["4", "6", "8"];
+const DEFAULT_DURATION_BY_PLATFORM = {
+    Grok: "10",
+    Veo: "8",
+};
 
 const GROK_MAX_IMAGES = 7;
 const VEO_MAX_IMAGES = 3;
@@ -111,7 +115,9 @@ function applyPlatform(node, platform, preferredSize) {
             const newValues = plat === "Veo" ? VEO_DURATIONS : GROK_DURATIONS;
             if (JSON.stringify(w.options.values) !== JSON.stringify(newValues)) {
                 w.options.values = newValues;
-                if (!newValues.includes(w.value)) w.value = newValues[newValues.length - 1];
+                if (!newValues.includes(w.value)) {
+                    w.value = DEFAULT_DURATION_BY_PLATFORM[plat] || newValues[0];
+                }
                 changed = true;
             }
         }
@@ -195,7 +201,7 @@ app.registerExtension({
                 node._lastHasImage = hasImg;
                 const ratioW = node.widgets?.find(w => w.name === "ratio");
                 if (ratioW && plat !== "Veo") {
-                    const target = hasImg ? "AUTO" : "16:9";
+                    const target = hasImg ? "auto" : "16:9";
                     if (ratioW.options.values.includes(target) && ratioW.value !== target) {
                         ratioW.value = target;
                         preserveNodeSize(node, preferredSize);

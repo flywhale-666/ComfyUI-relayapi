@@ -9,15 +9,16 @@ const TASK_PLATFORMS = {
 };
 
 const TASK_API_FORMATS = {
-    image: ["gemini_style", "relay_api_style"],
-    video: ["relay_v1_style", "relay_v1cheap_style", "relay_v2_style"],
-    sound: ["relay_api_style"],
-    text: ["gemini_style", "openai_style"],
+    image: ["v1beta/models", "v1/images", "v1/chat/completions"],
+    video: ["v1/video", "v1/videos", "v2/videos"],
+    sound: ["suno/submit"],
+    text: ["v1beta/models", "v1/chat/completions"],
 };
 
 const PLATFORM_API_FORMATS = {
-    "gpt-image2": ["relay_api_style"],
-    "OpenaiText": ["openai_style"],
+    "gpt-image2": ["v1/images"],
+    "Veo": ["v1/video", "v1/videos", "v2/videos"],
+    "OpenaiText": ["v1/chat/completions"],
 };
 
 app.registerExtension({
@@ -82,9 +83,9 @@ app.registerExtension({
             }
         }
 
-        // api_format 永远保持两个可选（native_style / openai_style），由用户手动选择
+        // api_format uses endpoint path names. The task/platform decides which endpoints are selectable.
         function applyApiFormats(tt, plat) {
-            const formats = PLATFORM_API_FORMATS[plat] || TASK_API_FORMATS[tt] || ["native_style", "openai_style"];
+            const formats = PLATFORM_API_FORMATS[plat] || TASK_API_FORMATS[tt] || [];
 
             if (api_format && formats.length > 0) {
                 api_format.options.values = formats;

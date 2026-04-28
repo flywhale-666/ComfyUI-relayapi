@@ -157,7 +157,7 @@ class RelayTextGenerator:
         return payload
 
     def _gemini_text_generate(self, base_url, api_key, model, prompt, images, pbar):
-        paths = API_PATHS.get("text_gemini_style", {})
+        paths = API_PATHS.get("text_v1beta/models", {})
         path_tpl = paths.get("generate", "/v1beta/models/{model}:generateContent")
         url = f"{base_url}{path_tpl.format(model=model)}"
 
@@ -190,7 +190,7 @@ class RelayTextGenerator:
         return resp.json()
 
     def _openai_chat_generate(self, base_url, api_key, model, prompt, images, pbar):
-        paths = API_PATHS.get("text_openai_style", {})
+        paths = API_PATHS.get("text_v1/chat/completions", {})
         url = f"{base_url}{paths.get('chat', '/v1/chat/completions')}"
 
         if images:
@@ -246,7 +246,7 @@ class RelayTextGenerator:
             raw_base = parsed.get("api_base", "")
             base_url = raw_base.strip().rstrip("/") if raw_base.strip() else get_current_base_url()
             model = (parsed.get("model", "") or "").strip()
-            api_format = (parsed.get("api_format", "gemini_style") or "").strip()
+            api_format = (parsed.get("api_format", "v1beta/models") or "").strip()
             platform = (parsed.get("platform", "GeminiText") or "").strip()
             task_type = (parsed.get("task_type", "text") or "").strip()
 
@@ -254,10 +254,10 @@ class RelayTextGenerator:
                 self._err("Relay API Settings task_type must be text.")
             if platform not in {"GeminiText", "OpenaiText"}:
                 self._err(f"Unsupported text platform: {platform}")
-            if api_format not in {"gemini_style", "openai_style"}:
+            if api_format not in {"v1beta/models", "v1/chat/completions"}:
                 self._err(f"Unsupported text api_format: {api_format}")
-            if platform == "OpenaiText" and api_format != "openai_style":
-                self._err("OpenaiText only supports openai_style.")
+            if platform == "OpenaiText" and api_format != "v1/chat/completions":
+                self._err("OpenaiText only supports v1/chat/completions.")
             if not model:
                 self._err("Model not found. Please set via Relay API Settings node.")
 
@@ -272,7 +272,7 @@ class RelayTextGenerator:
             t0 = time.time()
             print(f"[RelayAPI] text | {platform} | {api_format} | {base_url} | {model}")
 
-            if api_format == "gemini_style":
+            if api_format == "v1beta/models":
                 result = self._gemini_text_generate(base_url, api_key, model, prompt, images, pbar)
             else:
                 result = self._openai_chat_generate(base_url, api_key, model, prompt, images, pbar)

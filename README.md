@@ -30,7 +30,7 @@ Settings 节点通过 `info` 输出把配置传给下游生成节点。
 | --- | --- |
 | `task_type` | `image` / `video` / `sound` / `text` |
 | `platform` | 随任务类型切换 |
-| `api_format` | 随任务类型和平台切换 |
+| `api_format` | 使用端点路径命名，随任务类型和平台切换 |
 | `api_base` | 中转站地址 |
 | `model` | 当前平台和格式可用的模型 |
 | `apikey` | API Key，本地保存并在界面遮盖显示 |
@@ -45,16 +45,20 @@ https://ai.t8star.cn
 https://api.bltcy.ai
 ```
 
-注意：API Key 要和 `api_base` 对应，不要把 BLT 的 key 发到太快啦，或反过来。
+注意：API Key 要和 `api_base` 对应。
 
 ## API 格式
 
+`api_format` 现在直接用端点路径命名，避免把中转站接口误解成官方原生格式。
+
 | 任务 | 格式 |
 | --- | --- |
-| image | `gemini_style` / `relay_api_style` |
-| video | `relay_v1_style` / `relay_v1cheap_style` / `relay_v2_style` |
-| sound | `relay_api_style` |
-| text | `gemini_style` / `openai_style` |
+| image | `v1beta/models` / `v1/images` / `v1/chat/completions` |
+| video | `v1/video` / `v1/videos` / `v2/videos` |
+| sound | `suno/submit` |
+| text | `v1beta/models` / `v1/chat/completions` |
+
+端点名只决定 URL；具体 payload 仍由对应的生成节点按文本、图像、视频、音乐任务分别拼装。
 
 ## 文本
 
@@ -62,10 +66,11 @@ https://api.bltcy.ai
 
 | platform | api_format | 模型 |
 | --- | --- | --- |
-| GeminiText | `gemini_style` | `gemini-3.1-flash-lite-preview` / `gemini-3-flash-preview` / `gemini-3.1-pro-preview` |
-| OpenaiText | `openai_style` | `claude-opus-4-6`，以及用户自定义模型 |
+| GeminiText | `v1beta/models` | `gemini-3.1-flash-lite-preview` / `gemini-3-flash-preview` / `gemini-3.1-pro-preview` |
+| GeminiText | `v1/chat/completions` | `gemini-3.1-flash-lite-preview` / `gemini-3-flash-preview` / `gemini-3.1-pro-preview` |
+| OpenaiText | `v1/chat/completions` | `claude-opus-4-6` / `grok-4.1`，以及用户自定义模型 |
 
-`OpenaiText` 只允许 `openai_style`。
+`OpenaiText` 只允许 `v1/chat/completions`。
 
 输入：
 
@@ -73,7 +78,7 @@ https://api.bltcy.ai
 | --- | --- |
 | `prompt` | 文本提示词 |
 | `image1` ~ `image8` | 可选图片输入 |
-| `seed` | 用于 ComfyUI 重跑控制 |
+| `seed` | 只用于 ComfyUI 重跑控制，不会传给 API |
 
 输出：
 
@@ -82,7 +87,7 @@ https://api.bltcy.ai
 | `text` | 提取后的纯文本结果 |
 | `response` | 精简 JSON，只保留 `code`、`text`、`platform`、`api_format`、`model`、耗时、用量等字段 |
 
-`response` 不再输出 Gemini 原始 `candidates` 和 `thoughtSignature`，避免展示节点被长串内容卡住。
+`response` 不输出 Gemini 原始 `candidates` 和 `thoughtSignature`，避免展示节点被长串内容卡住。
 
 ## 图像
 
@@ -90,17 +95,20 @@ https://api.bltcy.ai
 
 | platform | api_format | 模型 |
 | --- | --- | --- |
-| banana-pro | `gemini_style` | `gemini-3-pro-image-preview` |
-| banana-pro | `relay_api_style` | `nano-banana-pro` |
-| banana-2 | `gemini_style` / `relay_api_style` | `gemini-3.1-flash-image-preview` |
-| gpt-image2 | `relay_api_style` | `gpt-image-2` |
+| banana-pro | `v1beta/models` | `gemini-3-pro-image-preview` |
+| banana-pro | `v1/images` | `nano-banana-pro` |
+| banana-pro | `v1/chat/completions` | `gemini-3-pro-image-preview` |
+| banana-2 | `v1beta/models` | `gemini-3.1-flash-image-preview` |
+| banana-2 | `v1/chat/completions` | `gemini-3.1-flash-image-preview` |
+| gpt-image2 | `v1/images` | `gpt-image-2` |
 
 图像接口：
 
 | api_format | 端点 |
 | --- | --- |
-| `gemini_style` | `/v1beta/models/{model}:generateContent` |
-| `relay_api_style` | `/v1/images/generations` 或 `/v1/images/edits` |
+| `v1beta/models` | `/v1beta/models/{model}:generateContent` |
+| `v1/images` | `/v1/images/generations` 或 `/v1/images/edits` |
+| `v1/chat/completions` | `/v1/chat/completions` |
 
 输入：
 
@@ -111,13 +119,28 @@ https://api.bltcy.ai
 | `size` | `1K` / `2K` / `4K` |
 | `image1` ~ `image16` | 可选参考图或编辑图 |
 | `quality` / `moderation` | 主要用于 `gpt-image2` |
+| `seed` | 只用于 ComfyUI 重跑控制，不会传给 API |
+
+格式说明：
+
+| api_format | 行为 |
+| --- | --- |
+| `v1beta/models` | 使用 Gemini `generationConfig.imageConfig`，结构化传入 `ratio` 和 `size` |
+| `v1/images` | 使用图像接口字段；`gpt-image2` 会把 `ratio` + `size` 换算成具体像素尺寸，例如 `2K` + `1:1` 发送为 `2048x2048` |
+| `v1/chat/completions` | 不稳定识别结构化 `size` 字段；节点不会传 `size` 和 `seed`，当 `ratio` 不是 `auto` 时，会把比例要求自动拼进提示词 |
+
+`v1/chat/completions` 自动拼接示例：
+
+```text
+请生成宽高比为 21:9 的图片，严格保持这个画面比例。
+```
 
 输出：
 
 | 输出 | 说明 |
 | --- | --- |
 | `image` | 生成图片 |
-| `response` | 结果 JSON |
+| `response` | 精简结果 JSON，大段 base64 会被省略 |
 | `image_url` | 图片 URL，若接口返回 |
 
 ![图像生成示例](assets/screenshot_image.png)
@@ -135,24 +158,22 @@ https://api.bltcy.ai
 
 | api_format | 主要用途 | 创建 | 查询 |
 | --- | --- | --- | --- |
-| `relay_v1_style` | 太快啦一类 V1 接口 | Grok: `/v1/video/create`；Veo: `/v1/videos` | Grok: `/v1/video/query?id={task_id}`；Veo: `/v1/videos/{task_id}` |
-| `relay_v1cheap_style` | V1 低价 OpenAI 视频格式 | `/v1/videos` | `/v1/videos/{task_id}` |
-| `relay_v2_style` | BLT/柏拉图一类 V2 接口 | `/v2/videos/generations` | `/v2/videos/generations/{task_id}` |
+| `v1/video` | V1 视频接口 | `/v1/video/create` | `/v1/video/query?id={task_id}` |
+| `v1/videos` | OpenAI 视频格式 V1 接口 | `/v1/videos` | `/v1/videos/{task_id}` |
+| `v2/videos` | BLT/柏拉图一类 V2 接口 | `/v2/videos/generations` | `/v2/videos/generations/{task_id}` |
 
-Veo V1 如查询完成但没有直接返回视频 URL，会尝试从：
+`v1/videos` 如查询完成但没有直接返回视频 URL，会继续尝试：
 
 ```text
 /v1/videos/{task_id}/content
 ```
 
-下载视频。
-
 模型：
 
 | platform | api_format | 模型 |
 | --- | --- | --- |
-| Grok | `relay_v1_style` / `relay_v1cheap_style` / `relay_v2_style` | `grok-video-3` / `grok-videos` |
-| Veo | `relay_v1_style` / `relay_v1cheap_style` / `relay_v2_style` | `veo3.1` / `veo3.1-fast` / `veo_3_1-lite` / `veo_3_1-lite-4K` / `veo_3_1-fast-4K` |
+| Grok | `v1/video` / `v1/videos` / `v2/videos` | `grok-video-3` / `grok-videos` |
+| Veo | `v1/video` / `v1/videos` / `v2/videos` | `veo3.1` / `veo3.1-fast` / `veo_3_1-lite` / `veo_3_1-lite-4K` / `veo_3_1-fast-4K` |
 
 Grok 参数：
 
@@ -160,15 +181,17 @@ Grok 参数：
 | --- | --- |
 | `size` | `720P` / `1080P` |
 | `duration` | `6` / `10` / `15` / `30` |
-| `ratio` | `AUTO` / `16:9` / `9:16` / `1:1` / `4:3` / `3:4` / `3:2` / `2:3` |
+| `ratio` | `auto` / `16:9` / `9:16` / `1:1` / `4:3` / `3:4` / `3:2` / `2:3` |
 
 Veo 参数：
 
 | 参数 | 支持值 |
 | --- | --- |
-| `size` | `720P` / `1080P`。4K 由 `*-4K` 模型名决定，不再作为 `size` 传入 |
+| `size` | `720P` / `1080P`。4K 由 `*-4K` 模型名决定，不再作为 `size=4K` 传入 |
 | `duration` | `4` / `6` / `8` |
 | `ratio` | `16:9` / `9:16` |
+| `enhance_prompt` | `true` / `false` |
+| `enable_HD` | `true` / `false` |
 
 输出：
 
@@ -188,7 +211,7 @@ Veo 参数：
 Suno 现在只保留一个格式：
 
 ```text
-relay_api_style
+suno/submit
 ```
 
 端点：
@@ -219,6 +242,7 @@ GET  /suno/fetch/{task_id}
 | `make_instrumental` | 是否纯音乐 |
 | `negative_tags` | 不想要的风格 |
 | `continue_clip_id` / `continue_at` | 续写参数 |
+| `seed` | 只用于 ComfyUI 重跑控制，不会传给 API |
 
 Suno 接口可能一次返回两首歌。当前节点的 `audio` 输出只取一个最佳 clip；完整列表仍在 `response.query` 里。
 
@@ -239,6 +263,7 @@ Suno 接口可能一次返回两首歌。当前节点的 `audio` 输出只取一
 | `Expecting value: line 1 column 1` | 接口返回空内容或非 JSON。通常是 `api_base` 和 key 混用，或端点不匹配 |
 | `PUBLIC_ERROR_UNSAFE_GENERATION` | 视频生成被安全过滤 |
 | Grok 选择 1080P 但结果仍为 720 | 请求已传 `resolution: 1080p`，若结果仍低分辨率，通常是中转站或模型通道忽略该档位 |
+| `当前分组上游负载已饱和` | 中转站当前分组上游拥堵，换 key/分组或稍后重试 |
 
 ## 配置文件
 

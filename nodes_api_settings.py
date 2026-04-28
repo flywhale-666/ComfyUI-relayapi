@@ -95,9 +95,9 @@ class RelayAPISettings:
 
         # api_format 由用户手动选择，不再根据 base_url 自动覆盖
         if platform == "gpt-image2":
-            api_format = "relay_api_style"
+            api_format = "v1/images"
         elif platform == "OpenaiText":
-            api_format = "openai_style"
+            api_format = "v1/chat/completions"
 
         plain_apikey = apikey.strip()
         has_plain_apikey = bool(plain_apikey and plain_apikey.isascii() and "\u2022" not in plain_apikey)
