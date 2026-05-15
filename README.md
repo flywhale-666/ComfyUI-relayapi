@@ -40,7 +40,7 @@ Settings 节点通过 `info` 输出把配置传给下游生成节点。
 内置地址：
 
 ```text
-https://www.taikuaila.cn
+https://yunwu.ai
 https://ai.t8star.cn
 https://api.bltcy.ai
 ```

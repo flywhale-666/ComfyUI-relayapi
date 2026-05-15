@@ -343,7 +343,7 @@ class RelayImageGenerator:
             # 显式要 b64_json：实测三家中转里
             #   - bltc / t8star：url 模式会走慢速通道（或不支持），120s 内跑不完；
             #                    b64 模式则走快速通道，bltc ~70s、t8star ~100s 稳定出图
-            #   - taikuaila：b64 / url 都能通，b64 稍慢但稳定
+            #   - yunwu：b64 / url 都能通，b64 稍慢但稳定
             # 所以统一用 b64_json 保三家都稳
             data_dict = {
                 "model": model,
@@ -567,7 +567,7 @@ class RelayImageGenerator:
             item = data_list[0]
             # 先找 b64_json：中间有时
             # 响应里同时带 url 和 b64_json，优先用 b64 省掉一次 CDN 下载
-            # （taikuaila 的 b64_json 里会带 data:image/webp;base64, 前缀，
+            # （yunwu 的 b64_json 里会带 data:image/webp;base64, 前缀，
             # _base64_to_tensor 里已经做了剥离处理）
             b64 = item.get("b64_json", "")
             if b64:

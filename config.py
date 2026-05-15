@@ -5,7 +5,7 @@ from aiohttp import web
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'relay_config.json')
 
 DEFAULT_API_BASES = [
-    "https://www.taikuaila.cn",
+    "https://yunwu.ai",
     "https://ai.t8star.cn",
     "https://api.bltcy.ai",
 ]
