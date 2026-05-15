@@ -26,6 +26,7 @@ SOUND_VERSION_MODEL_MAP_OPENAI = {
 }
 SOUND_SETTINGS_MODEL_BY_FORMAT = {
     "suno/submit": "suno_music",
+    "runninghub-/openapi/v2": "rhart-audio-suno-v5.5",
 }
 
 
@@ -363,6 +364,127 @@ class RelaySoundGenerator:
 
         self._err(f"Suno polling timeout after {round(time.time() - start, 1)}s")
 
+    # ══════════════════════════════════════
+    #  RunningHub — /openapi/v2 Suno
+    # ══════════════════════════════════════
+    def _build_rh_payload(self, generation_mode, title, tags, prompt, make_instrumental):
+        if generation_mode == MODE_DESCRIPTION:
+            payload = {
+                "description": prompt,
+                "make_instrumental": "true" if make_instrumental else "false",
+            }
+            if title.strip():
+                payload["title"] = title.strip()
+        else:
+            payload = {
+                "title": title.strip(),
+                "prompt": "" if make_instrumental else prompt,
+                "tags": tags.strip(),
+            }
+        return payload
+
+    def _submit_rh_suno(self, base_url, api_key, generation_mode, title, tags,
+                        prompt, make_instrumental, pbar):
+        paths = API_PATHS.get("sound_runninghub-/openapi/v2", {})
+        if generation_mode == MODE_CUSTOM:
+            url = base_url + paths.get("custom", "/openapi/v2/rhart-audio/suno-v5.5/custom")
+        else:
+            url = base_url + paths.get("single", "/openapi/v2/rhart-audio/suno-v5.5/single")
+
+        payload = self._build_rh_payload(generation_mode, title, tags, prompt, make_instrumental)
+
+        pbar.update_absolute(30)
+        print(f"[RelayAPI] POST {url} (RH Suno, {generation_mode})")
+        resp = requests.post(
+            url,
+            headers=self._headers_auth(api_key),
+            json=payload,
+            timeout=self.timeout,
+        )
+        print(f"[RelayAPI] -> {resp.status_code}")
+        if resp.status_code != 200:
+            self._err(f"RH Suno create error: {resp.status_code} - {resp.text[:500]}")
+
+        result = resp.json()
+        task_id = result.get("taskId") or result.get("task_id") or result.get("id")
+        if not task_id:
+            data = result.get("data")
+            if isinstance(data, str) and data.strip():
+                task_id = data.strip()
+            elif isinstance(data, dict):
+                task_id = data.get("taskId") or data.get("task_id") or data.get("id") or ""
+        if not task_id:
+            self._err(f"RH Suno: no taskId in {json.dumps(result, ensure_ascii=False)[:500]}")
+
+        if str(result.get("status", "")).upper() == "FAILED":
+            self._err(f"RH Suno task failed: {result.get('errorMessage', '')}")
+
+        return str(task_id), result
+
+    def _query_rh_suno(self, base_url, api_key, task_id):
+        paths = API_PATHS.get("sound_runninghub-/openapi/v2", {})
+        url = base_url + paths.get("query", "/openapi/v2/query")
+        resp = requests.post(
+            url,
+            headers=self._headers_auth(api_key),
+            json={"taskId": task_id},
+            timeout=30,
+        )
+        if resp.status_code != 200:
+            return None
+        return resp.json()
+
+    def _poll_rh(self, base_url, api_key, task_id, pbar):
+        start = time.time()
+        interval = 2
+
+        while time.time() - start <= self.poll_timeout:
+            time.sleep(interval)
+            interval = min(interval + 1, 6)
+            try:
+                result = self._query_rh_suno(base_url, api_key, task_id)
+                if not result:
+                    continue
+
+                status = str(
+                    result.get("status")
+                    or (result.get("data") or {}).get("status")
+                    or ""
+                ).upper()
+
+                progress = result.get("progress") or (result.get("data") or {}).get("progress")
+                if isinstance(progress, str) and progress.endswith("%"):
+                    try:
+                        pbar.update_absolute(min(90, 40 + int(progress[:-1]) // 2))
+                    except ValueError:
+                        pass
+
+                if status in ("FAILED", "ERROR"):
+                    reason = result.get("errorMessage") or result.get("message") or status
+                    self._err(f"RH Suno task failed: {reason}")
+
+                if status in ("SUCCESS", "COMPLETED", "DONE"):
+                    clip_info = self._extract_best_clip(result, require_terminal=False)
+                    if clip_info:
+                        return clip_info, result
+                    for container in (result, result.get("data") or {}):
+                        if not isinstance(container, dict):
+                            continue
+                        for key in ("audio_url", "output_url", "download_url", "url"):
+                            val = container.get(key)
+                            if isinstance(val, str) and val.startswith("http"):
+                                return {"clip_id": task_id, "audio_url": val, "clip": container}, result
+                    self._err(f"RH Suno done but no audio_url: {json.dumps(result)[:500]}")
+
+            except requests.exceptions.Timeout:
+                continue
+            except RuntimeError:
+                raise
+            except Exception:
+                continue
+
+        self._err(f"RH Suno polling timeout after {round(time.time() - start, 1)}s")
+
     def _download_audio(self, url):
         resp = requests.get(url, timeout=self.timeout)
         resp.raise_for_status()
@@ -411,7 +533,7 @@ class RelaySoundGenerator:
                 self._err("Relay API Settings task_type must be sound.")
             if platform != "Suno":
                 self._err(f"Unsupported sound platform: {platform}")
-            if api_format != "suno/submit":
+            if api_format not in {"suno/submit", "runninghub-/openapi/v2"}:
                 self._err(f"Unsupported sound api_format: {api_format}")
 
             expected_settings_model = SOUND_SETTINGS_MODEL_BY_FORMAT.get(api_format, "")
@@ -439,24 +561,37 @@ class RelaySoundGenerator:
             pbar = comfy.utils.ProgressBar(100)
             pbar.update_absolute(10)
 
-            task_id, submit_result = self._submit_suno(
-                base_url=base_url,
-                api_key=api_key,
-                api_format=api_format,
-                version_model=version_model,
-                generation_mode=generation_mode,
-                title=title,
-                tags=tags,
-                prompt=cleaned_prompt,
-                make_instrumental=make_instrumental,
-                negative_tags=negative_tags,
-                continue_clip_id=continue_clip_id if extend_mode else "",
-                continue_at=continue_at if extend_mode else 0.0,
-                pbar=pbar,
-            )
-
-            pbar.update_absolute(40)
-            clip_info, query_result = self._poll(base_url, api_key, task_id, api_format, pbar)
+            if api_format == "runninghub-/openapi/v2":
+                task_id, submit_result = self._submit_rh_suno(
+                    base_url=base_url,
+                    api_key=api_key,
+                    generation_mode=generation_mode,
+                    title=title,
+                    tags=tags,
+                    prompt=cleaned_prompt,
+                    make_instrumental=make_instrumental,
+                    pbar=pbar,
+                )
+                pbar.update_absolute(40)
+                clip_info, query_result = self._poll_rh(base_url, api_key, task_id, pbar)
+            else:
+                task_id, submit_result = self._submit_suno(
+                    base_url=base_url,
+                    api_key=api_key,
+                    api_format=api_format,
+                    version_model=version_model,
+                    generation_mode=generation_mode,
+                    title=title,
+                    tags=tags,
+                    prompt=cleaned_prompt,
+                    make_instrumental=make_instrumental,
+                    negative_tags=negative_tags,
+                    continue_clip_id=continue_clip_id if extend_mode else "",
+                    continue_at=continue_at if extend_mode else 0.0,
+                    pbar=pbar,
+                )
+                pbar.update_absolute(40)
+                clip_info, query_result = self._poll(base_url, api_key, task_id, api_format, pbar)
             clip_id = str(clip_info.get("clip_id") or "")
             audio_url = str(clip_info.get("audio_url") or "")
 

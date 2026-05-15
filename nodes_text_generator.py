@@ -254,10 +254,13 @@ class RelayTextGenerator:
                 self._err("Relay API Settings task_type must be text.")
             if platform not in {"GeminiText", "OpenaiText"}:
                 self._err(f"Unsupported text platform: {platform}")
-            if api_format not in {"v1beta/models", "v1/chat/completions"}:
+            if api_format not in {"v1beta/models", "v1/chat/completions", "runninghub-/v1"}:
                 self._err(f"Unsupported text api_format: {api_format}")
-            if platform == "OpenaiText" and api_format != "v1/chat/completions":
-                self._err("OpenaiText only supports v1/chat/completions.")
+            if platform == "OpenaiText" and api_format not in {"v1/chat/completions", "runninghub-/v1"}:
+                self._err("OpenaiText only supports v1/chat/completions or runninghub-/v1.")
+
+            if api_format == "runninghub-/v1":
+                base_url = "https://llm.runninghub.ai"
             if not model:
                 self._err("Model not found. Please set via Relay API Settings node.")
 

@@ -685,6 +685,145 @@ class RelayImageGenerator:
         return pil2tensor(img)
 
     # ══════════════════════════════════════
+    #  RunningHub — /openapi/v2 异步提交+轮询
+    # ══════════════════════════════════════
+    def _rh_upload_image(self, base_url, api_key, image_tensor):
+        url = f"{base_url}/openapi/v2/media/upload/binary"
+        img_bytes = self._image_to_bytes(image_tensor)
+        files = {"file": ("image.png", BytesIO(img_bytes), "image/png")}
+        resp = requests.post(url, headers={"Authorization": f"Bearer {api_key}"}, files=files, timeout=60)
+        if resp.status_code != 200:
+            self._err(f"RH upload error: {resp.status_code} - {resp.text[:500]}")
+        data = resp.json()
+        if data.get("code") != 0:
+            self._err(f"RH upload failed: code={data.get('code')} msg={data.get('message', '')}")
+        download_url = (data.get("data") or {}).get("download_url") or (data.get("data") or {}).get("downloadUrl") or (data.get("data") or {}).get("url")
+        if not download_url:
+            self._err(f"RH upload: no download_url in {json.dumps(data)[:500]}")
+        return download_url
+
+    def _rh_poll(self, base_url, api_key, task_id, timeout=600):
+        query_url = f"{base_url}/openapi/v2/query"
+        start = time.time()
+        interval = 2
+        while time.time() - start < timeout:
+            time.sleep(interval)
+            interval = min(interval + 1, 6)
+            try:
+                resp = requests.post(
+                    query_url,
+                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    json={"taskId": task_id},
+                    timeout=30,
+                )
+                if resp.status_code != 200:
+                    print(f"[RelayAPI] RH query HTTP {resp.status_code}")
+                    continue
+                data = resp.json()
+                status = (data.get("status") or (data.get("data") or {}).get("status") or "").upper()
+                if status == "FAILED":
+                    reason = data.get("errorMessage") or json.dumps(data.get("failedReason") or {})
+                    self._err(f"RH task failed: {reason}")
+                if status in ("SUCCESS", "COMPLETED", "DONE"):
+                    return data
+            except requests.exceptions.Timeout:
+                continue
+            except RuntimeError:
+                raise
+            except Exception as e:
+                print(f"[RelayAPI] RH poll error: {e}")
+                continue
+        self._err(f"RH polling timeout after {round(time.time() - start, 1)}s")
+
+    def _rh_image_generate(self, base_url, api_key, model, prompt, ratio, size, quality,
+                           images, pbar):
+        paths = API_PATHS.get("image_runninghub-/openapi/v2", {})
+        has_images = len(images) > 0
+
+        image_urls = []
+        if has_images:
+            for i, img in enumerate(images):
+                pbar.update_absolute(15 + i * 3)
+                url = self._rh_upload_image(base_url, api_key, img)
+                image_urls.append(url)
+
+        size_map = {"1K": "1k", "2K": "2k", "4K": "4k"}
+        resolution = size_map.get((size or "").upper(), "2k")
+        aspect_ratio = ratio if ratio and ratio != "auto" else "1:1"
+
+        payload = {
+            "prompt": prompt,
+            "aspectRatio": aspect_ratio,
+            "resolution": resolution,
+            "quality": quality or "medium",
+        }
+        if image_urls:
+            payload["imageUrls"] = image_urls
+
+        if has_images:
+            endpoint = paths.get("edit", f"/openapi/v2/{model}/image-to-image")
+        else:
+            endpoint = paths.get("create", f"/openapi/v2/{model}/text-to-image")
+        url = f"{base_url}{endpoint.format(model=model)}"
+
+        pbar.update_absolute(40)
+        print(f"[RelayAPI] POST {url} (RH image, {len(images)} images, model={model})")
+        resp = requests.post(
+            url,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=self.timeout,
+        )
+        pbar.update_absolute(50)
+        if resp.status_code != 200:
+            self._err(f"RH image submit error: {resp.status_code} - {resp.text[:500]}")
+
+        result = resp.json()
+        task_id = result.get("taskId") or result.get("task_id") or result.get("id")
+        if not task_id:
+            self._err(f"RH image: no taskId in {json.dumps(result)[:500]}")
+
+        if result.get("status", "").upper() == "FAILED":
+            self._err(f"RH image task failed immediately: {result.get('errorMessage', '')}")
+
+        print(f"[RelayAPI] RH image task created: {task_id}")
+        pbar.update_absolute(55)
+
+        poll_data = self._rh_poll(base_url, api_key, task_id, timeout=600)
+        pbar.update_absolute(85)
+        return poll_data
+
+    def _rh_extract_image(self, poll_data):
+        for container in (poll_data, poll_data.get("data") or {}):
+            if not isinstance(container, dict):
+                continue
+            for key in ("image_url", "output_url", "download_url", "file_url", "url"):
+                val = container.get(key)
+                if isinstance(val, dict):
+                    inner = val.get("url") or val.get("download_url")
+                    if isinstance(inner, str) and inner.startswith("http"):
+                        return inner
+                if isinstance(val, str) and val.startswith("http"):
+                    return val
+            output = container.get("output")
+            if isinstance(output, dict):
+                for k in ("url", "image_url", "download_url"):
+                    v = output.get(k)
+                    if isinstance(v, str) and v.startswith("http"):
+                        return v
+            results = container.get("results") or container.get("images") or []
+            if isinstance(results, list):
+                for item in results:
+                    if isinstance(item, str) and item.startswith("http"):
+                        return item
+                    if isinstance(item, dict):
+                        for k in ("url", "image_url", "download_url", "output_url"):
+                            v = item.get(k)
+                            if isinstance(v, str) and v.startswith("http"):
+                                return v
+        return None
+
+    # ══════════════════════════════════════
     #  主入口
     # ══════════════════════════════════════
     def generate_image(self, prompt, ratio, size, quality, format, moderation, seed,
@@ -706,9 +845,9 @@ class RelayImageGenerator:
             model = parsed.get("model", "")
             api_format = parsed.get("api_format", "v1/images")
             platform = parsed.get("platform", "banana-pro")
-            if platform == "gpt-image2" and api_format != "v1/images":
-                self._err("gpt-image2 only supports v1/images.")
-            if api_format not in {"v1beta/models", "v1/chat/completions", "v1/images"}:
+            if platform == "gpt-image2" and api_format not in {"v1/images", "runninghub-/openapi/v2"}:
+                self._err("gpt-image2 only supports v1/images or runninghub-/openapi/v2.")
+            if api_format not in {"v1beta/models", "v1/chat/completions", "v1/images", "runninghub-/openapi/v2"}:
                 self._err(f"Unsupported image api_format: {api_format}")
             allowed_ratios = IMAGE_RATIOS_BY_PLATFORM.get(platform, IMAGE_RATIOS_BASE)
             ratio = self._normalize_choice("ratio", ratio, allowed_ratios, "1:1")
@@ -729,7 +868,24 @@ class RelayImageGenerator:
             pbar.update_absolute(10)
             t_total_start = time.time()
 
-            if platform == "gpt-image2":
+            if api_format == "runninghub-/openapi/v2":
+                poll_data = self._rh_image_generate(
+                    base_url, api_key, model, prompt, ratio, size, quality,
+                    images, pbar,
+                )
+                img_url = self._rh_extract_image(poll_data)
+                if not img_url:
+                    self._err(f"RH image: no image URL in poll result: {json.dumps(poll_data)[:500]}")
+                print(f"[RelayAPI] RH image URL: {img_url}")
+                t_api = time.time() - t_total_start
+                pbar.update_absolute(90)
+                img_tensor = self._download_image(img_url, timeout=120)
+                pbar.update_absolute(100)
+                resp_json = json.dumps({"code": "success", "url": img_url})
+                print(f"[RelayAPI] TIMING total={time.time()-t_total_start:.1f}s api={t_api:.1f}s")
+                return (img_tensor, resp_json, img_url)
+
+            elif platform == "gpt-image2":
                 result = self._gpt_image2_openai_generate(
                     base_url, api_key, model, prompt, ratio, size, quality, moderation,
                     images, pbar,

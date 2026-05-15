@@ -40,6 +40,8 @@ Settings 节点通过 `info` 输出把配置传给下游生成节点。
 内置地址：
 
 ```text
+https://www.runninghub.cn
+https://llm.runninghub.ai
 https://yunwu.ai
 https://ai.t8star.cn
 https://api.bltcy.ai
@@ -53,12 +55,30 @@ https://api.bltcy.ai
 
 | 任务 | 格式 |
 | --- | --- |
-| image | `v1beta/models` / `v1/images` / `v1/chat/completions` |
-| video | `v1/video` / `v1/videos` / `v2/videos` |
-| sound | `suno/submit` |
-| text | `v1beta/models` / `v1/chat/completions` |
+| image | `runninghub-/openapi/v2` / `v1beta/models` / `v1/images` / `v1/chat/completions` |
+| video | `runninghub-/openapi/v2` / `v1/video` / `v1/videos` / `v2/videos` |
+| sound | `runninghub-/openapi/v2` / `suno/submit` |
+| text | `runninghub-/v1` / `v1beta/models` / `v1/chat/completions` |
 
 端点名只决定 URL；具体 payload 仍由对应的生成节点按文本、图像、视频、音乐任务分别拼装。
+
+## RunningHub
+
+选择 `runninghub-/openapi/v2`（图像/视频/音乐）或 `runninghub-/v1`（文本）api_format 后，模型列表会切换为 RunningHub 对应模型。
+
+图像/视频/音乐走 RunningHub 异步提交+轮询逻辑（`/openapi/v2/` 端点），文本走标准 `v1/chat/completions`（base_url 自动指向 `https://llm.runninghub.ai`）。
+
+| 任务 | platform | RH 模型 |
+| --- | --- | --- |
+| image | banana-pro | `rhart-image-n-pro` / `rhart-image-n-pro-official` |
+| image | banana-2 | `rhart-image-n-g31-flash` / `rhart-image-n-g31-flash-official` |
+| image | gpt-image2 | `rhart-image-g-2` / `rhart-image-g-2-official` |
+| video | Grok | `rhart-video-g` |
+| video | Veo | `rhart-video-v3.1-fast` |
+| sound | Suno | `rhart-audio-suno-v5.5` |
+| text | GeminiText / OpenaiText | `anthropic/claude-opus-4.6` / `openai/gpt-5.5` / `google/gemini-3.1-pro-preview` 等 |
+
+图片上传使用 `/openapi/v2/media/upload/binary`，查询使用 `POST /openapi/v2/query`。
 
 ## 文本
 
@@ -68,9 +88,11 @@ https://api.bltcy.ai
 | --- | --- | --- |
 | GeminiText | `v1beta/models` | `gemini-3.1-flash-lite-preview` / `gemini-3-flash-preview` / `gemini-3.1-pro-preview` |
 | GeminiText | `v1/chat/completions` | `gemini-3.1-flash-lite-preview` / `gemini-3-flash-preview` / `gemini-3.1-pro-preview` |
+| GeminiText | `runninghub-/v1` | `anthropic/claude-opus-4.6` / `openai/gpt-5.5` / `google/gemini-3.1-pro-preview` 等 |
 | OpenaiText | `v1/chat/completions` | `claude-opus-4-6` / `grok-4.1`，以及用户自定义模型 |
+| OpenaiText | `runninghub-/v1` | 同 GeminiText RH 模型 |
 
-`OpenaiText` 只允许 `v1/chat/completions`。
+`OpenaiText` 只允许 `v1/chat/completions` 或 `runninghub-/v1`。
 
 输入：
 
@@ -95,11 +117,14 @@ https://api.bltcy.ai
 
 | platform | api_format | 模型 |
 | --- | --- | --- |
+| banana-pro | `runninghub-/openapi/v2` | `rhart-image-n-pro` / `rhart-image-n-pro-official` |
 | banana-pro | `v1beta/models` | `gemini-3-pro-image-preview` |
 | banana-pro | `v1/images` | `nano-banana-pro` |
 | banana-pro | `v1/chat/completions` | `gemini-3-pro-image-preview` |
+| banana-2 | `runninghub-/openapi/v2` | `rhart-image-n-g31-flash` / `rhart-image-n-g31-flash-official` |
 | banana-2 | `v1beta/models` | `gemini-3.1-flash-image-preview` |
 | banana-2 | `v1/chat/completions` | `gemini-3.1-flash-image-preview` |
+| gpt-image2 | `runninghub-/openapi/v2` | `rhart-image-g-2` / `rhart-image-g-2-official` |
 | gpt-image2 | `v1/images` | `gpt-image-2` |
 
 图像接口：
@@ -172,7 +197,9 @@ https://api.bltcy.ai
 
 | platform | api_format | 模型 |
 | --- | --- | --- |
+| Grok | `runninghub-/openapi/v2` | `rhart-video-g` |
 | Grok | `v1/video` / `v1/videos` / `v2/videos` | `grok-video-3` / `grok-videos` |
+| Veo | `runninghub-/openapi/v2` | `rhart-video-v3.1-fast` |
 | Veo | `v1/video` / `v1/videos` / `v2/videos` | `veo3.1` / `veo3.1-fast` / `veo_3_1-lite` / `veo_3_1-lite-4K` / `veo_3_1-fast-4K` |
 
 Grok 参数：
@@ -208,18 +235,19 @@ Veo 参数：
 
 ## 声音
 
-Suno 现在只保留一个格式：
+Suno 格式：
 
 ```text
+runninghub-/openapi/v2
 suno/submit
 ```
 
 端点：
 
-```text
-POST /suno/submit/music
-GET  /suno/fetch/{task_id}
-```
+| api_format | 提交 | 查询 |
+| --- | --- | --- |
+| `runninghub-/openapi/v2` | `POST /openapi/v2/rhart-audio/suno-v5.5/single` 或 `custom` | `POST /openapi/v2/query` |
+| `suno/submit` | `POST /suno/submit/music` | `GET /suno/fetch/{task_id}` |
 
 版本映射：
 

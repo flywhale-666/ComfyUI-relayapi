@@ -5,6 +5,8 @@ from aiohttp import web
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'relay_config.json')
 
 DEFAULT_API_BASES = [
+    "https://www.runninghub.cn",
+    "https://llm.runninghub.ai",
     "https://yunwu.ai",
     "https://ai.t8star.cn",
     "https://api.bltcy.ai",
@@ -25,33 +27,49 @@ DEFAULT_MODELS = {
     "OpenaiText": ["claude-opus-4-6", "grok-4.1"],
 }
 
+RH_TEXT_MODELS = [
+    "anthropic/claude-opus-4.6", "openai/gpt-5.5",
+    "google/gemini-3.1-pro-preview", "google/gemini-3-flash-preview",
+    "google/gemini-3.1-flash-lite-preview",
+]
+
 FORMAT_MODELS = {
+    "Grok": {
+        "runninghub-/openapi/v2": ["rhart-video-g"],
+    },
     "Veo": {
         "v1/video": ["veo3.1", "veo3.1-fast", "veo_3_1-lite", "veo_3_1-lite-4K", "veo_3_1-fast-4K"],
         "v1/videos": ["veo3.1", "veo3.1-fast", "veo_3_1-lite", "veo_3_1-lite-4K", "veo_3_1-fast-4K"],
         "v2/videos": ["veo3.1", "veo3.1-fast", "veo_3_1-lite", "veo_3_1-lite-4K", "veo_3_1-fast-4K"],
+        "runninghub-/openapi/v2": ["rhart-video-v3.1-fast"],
     },
     "banana-pro": {
         "v1beta/models": ["gemini-3-pro-image-preview"],
         "v1/images": ["nano-banana-pro"],
         "v1/chat/completions": ["gemini-3-pro-image-preview"],
+        "runninghub-/openapi/v2": ["rhart-image-n-pro", "rhart-image-n-pro-official"],
     },
     "banana-2": {
         "v1beta/models": ["gemini-3.1-flash-image-preview"],
         "v1/chat/completions": ["gemini-3.1-flash-image-preview"],
+        "runninghub-/openapi/v2": ["rhart-image-n-g31-flash", "rhart-image-n-g31-flash-official"],
     },
     "gpt-image2": {
         "v1/images": ["gpt-image-2"],
+        "runninghub-/openapi/v2": ["rhart-image-g-2", "rhart-image-g-2-official"],
     },
     "Suno": {
         "suno/submit": ["suno_music"],
+        "runninghub-/openapi/v2": ["rhart-audio-suno-v5.5"],
     },
     "GeminiText": {
         "v1beta/models": ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-3.1-pro-preview"],
         "v1/chat/completions": ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-3.1-pro-preview"],
+        "runninghub-/v1": RH_TEXT_MODELS,
     },
     "OpenaiText": {
         "v1/chat/completions": ["claude-opus-4-6", "grok-4.1"],
+        "runninghub-/v1": RH_TEXT_MODELS,
     },
 }
 
@@ -65,10 +83,10 @@ TASK_PLATFORMS = {
 
 PLATFORMS = list(DEFAULT_MODELS.keys())
 
-VIDEO_API_FORMATS = ["v1/video", "v1/videos", "v2/videos"]
-IMAGE_API_FORMATS = ["v1beta/models", "v1/images", "v1/chat/completions"]
-SOUND_API_FORMATS = ["suno/submit"]
-TEXT_API_FORMATS = ["v1beta/models", "v1/chat/completions"]
+VIDEO_API_FORMATS = ["runninghub-/openapi/v2", "v1/video", "v1/videos", "v2/videos"]
+IMAGE_API_FORMATS = ["runninghub-/openapi/v2", "v1beta/models", "v1/images", "v1/chat/completions"]
+SOUND_API_FORMATS = ["runninghub-/openapi/v2", "suno/submit"]
+TEXT_API_FORMATS = ["runninghub-/v1", "v1beta/models", "v1/chat/completions"]
 
 API_FORMATS_BY_TASK = {
     "video": VIDEO_API_FORMATS,
@@ -127,6 +145,26 @@ API_PATHS = {
         "generate": "/v1beta/models/{model}:generateContent",
     },
     "text_v1/chat/completions": {
+        "chat": "/v1/chat/completions",
+    },
+    "image_runninghub-/openapi/v2": {
+        "create": "/openapi/v2/{model}/text-to-image",
+        "edit": "/openapi/v2/{model}/image-to-image",
+        "upload": "/openapi/v2/upload",
+        "query": "/openapi/v2/query",
+    },
+    "video_runninghub-/openapi/v2": {
+        "text_to_video": "/openapi/v2/{model}/text-to-video",
+        "image_to_video": "/openapi/v2/{model}/image-to-video",
+        "upload": "/openapi/v2/upload",
+        "query": "/openapi/v2/query",
+    },
+    "sound_runninghub-/openapi/v2": {
+        "single": "/openapi/v2/rhart-audio/suno-v5.5/single",
+        "custom": "/openapi/v2/rhart-audio/suno-v5.5/custom",
+        "query": "/openapi/v2/query",
+    },
+    "text_runninghub-/v1": {
         "chat": "/v1/chat/completions",
     },
 }

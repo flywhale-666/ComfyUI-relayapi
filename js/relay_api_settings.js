@@ -9,16 +9,16 @@ const TASK_PLATFORMS = {
 };
 
 const TASK_API_FORMATS = {
-    image: ["v1beta/models", "v1/images", "v1/chat/completions"],
-    video: ["v1/video", "v1/videos", "v2/videos"],
-    sound: ["suno/submit"],
-    text: ["v1beta/models", "v1/chat/completions"],
+    image: ["runninghub-/openapi/v2", "v1beta/models", "v1/images", "v1/chat/completions"],
+    video: ["runninghub-/openapi/v2", "v1/video", "v1/videos", "v2/videos"],
+    sound: ["runninghub-/openapi/v2", "suno/submit"],
+    text: ["runninghub-/v1", "v1beta/models", "v1/chat/completions"],
 };
 
 const PLATFORM_API_FORMATS = {
-    "gpt-image2": ["v1/images"],
-    "Veo": ["v1/video", "v1/videos", "v2/videos"],
-    "OpenaiText": ["v1/chat/completions"],
+    "gpt-image2": ["runninghub-/openapi/v2", "v1/images"],
+    "Veo": ["runninghub-/openapi/v2", "v1/video", "v1/videos", "v2/videos"],
+    "OpenaiText": ["runninghub-/v1", "v1/chat/completions"],
 };
 
 app.registerExtension({
@@ -247,10 +247,28 @@ app.registerExtension({
             refreshModels(platform.value || "Grok", api_format ? api_format.value : "");
         };
 
+        const RH_TEXT_BASE = "https://llm.runninghub.ai";
+        const RH_MEDIA_BASE = "https://www.runninghub.cn";
+
+        function autoSwitchBaseForFormat(fmt) {
+            if (!api_base) return;
+            const bases = api_base.options.values || [];
+            if (fmt === "runninghub-/v1") {
+                if (bases.includes(RH_TEXT_BASE)) {
+                    api_base.value = RH_TEXT_BASE;
+                }
+            } else if (fmt === "runninghub-/openapi/v2") {
+                if (bases.includes(RH_MEDIA_BASE)) {
+                    api_base.value = RH_MEDIA_BASE;
+                }
+            }
+        }
+
         if (api_format) {
             const origFormatCb = api_format.callback;
             api_format.callback = function (value) {
                 if (origFormatCb) origFormatCb.call(this, value);
+                autoSwitchBaseForFormat(value);
                 refreshModels(platform.value, value);
             };
         }

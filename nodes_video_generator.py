@@ -496,6 +496,106 @@ class RelayVideoGenerator:
 
         return self._err("No result after " + str(round(time.time() - start, 1)) + "s")
 
+    # ══════════════════════════════════════
+    #  RunningHub — /openapi/v2 异步提交+轮询
+    # ══════════════════════════════════════
+    def _rh_upload_image(self, base_url, api_key, image_tensor):
+        url = base_url + "/openapi/v2/media/upload/binary"
+        img_bytes = self._image_to_bytes(image_tensor)
+        if not img_bytes:
+            self._err("Failed to convert image for RH upload.")
+        files = {"file": ("image.png", BytesIO(img_bytes), "image/png")}
+        resp = requests.post(url, headers={"Authorization": "Bearer " + api_key}, files=files, timeout=60)
+        if resp.status_code != 200:
+            self._err("RH upload error: " + str(resp.status_code) + " - " + resp.text[:500])
+        data = resp.json()
+        if data.get("code") != 0:
+            self._err("RH upload failed: code=" + str(data.get("code")) + " msg=" + str(data.get("message", "")))
+        d = data.get("data") or {}
+        download_url = d.get("download_url") or d.get("downloadUrl") or d.get("url")
+        if not download_url:
+            self._err("RH upload: no download_url in " + json.dumps(data)[:500])
+        return download_url
+
+    def _rh_video_create(self, base_url, api_key, model, prompt, ratio, size,
+                         duration, platform, images, pbar):
+        has_images = len(images) > 0
+        image_urls = []
+        if has_images:
+            for i, img in enumerate(images):
+                pbar.update_absolute(15 + i * 3)
+                url = self._rh_upload_image(base_url, api_key, img)
+                image_urls.append(url)
+
+        rh_aspect = ratio
+        if not rh_aspect or str(rh_aspect).lower() == "auto":
+            rh_aspect = "16:9"
+        rh_resolution = size.lower() if size else "720p"
+        rh_duration = int(duration) if duration else 10
+
+        payload = {
+            "prompt": prompt,
+            "aspectRatio": rh_aspect,
+            "resolution": rh_resolution,
+            "duration": rh_duration,
+        }
+        if image_urls:
+            payload["imageUrls"] = image_urls
+
+        if has_images:
+            endpoint = "/openapi/v2/" + model + "/image-to-video"
+        else:
+            endpoint = "/openapi/v2/" + model + "/text-to-video"
+        url = base_url + endpoint
+
+        pbar.update_absolute(35)
+        print("[RelayAPI] POST " + url + " (RH video, model=" + model + ")")
+        resp = requests.post(
+            url,
+            headers={"Authorization": "Bearer " + api_key, "Content-Type": "application/json"},
+            json=payload,
+            timeout=self.timeout,
+        )
+        if resp.status_code != 200:
+            self._err("RH video submit error: " + str(resp.status_code) + " - " + resp.text[:500])
+
+        result = resp.json()
+        task_id = result.get("taskId") or result.get("task_id") or result.get("id")
+        if not task_id:
+            self._err("RH video: no taskId in " + json.dumps(result)[:500])
+        if str(result.get("status", "")).upper() == "FAILED":
+            self._err("RH video task failed: " + str(result.get("errorMessage", "")))
+        print("[RelayAPI] RH video task: " + str(task_id))
+        return str(task_id), payload
+
+    def _rh_video_query(self, base_url, api_key, task_id):
+        url = base_url + "/openapi/v2/query"
+        resp = requests.post(
+            url,
+            headers={"Authorization": "Bearer " + api_key, "Content-Type": "application/json"},
+            json={"taskId": task_id},
+            timeout=30,
+        )
+        if resp.status_code != 200:
+            raise RuntimeError("RH query HTTP " + str(resp.status_code) + ": " + resp.text[:300])
+        data = resp.json()
+        status = str(data.get("status") or (data.get("data") or {}).get("status") or "").upper()
+
+        if status in ("FAILED", "ERROR", "CANCELLED"):
+            reason = data.get("errorMessage") or data.get("message") or status
+            self._err("RH video task failed: " + str(reason))
+
+        video_url = self._extract_video_url(data) or self._extract_video_url(data.get("data") or {})
+        mapped_status = "unknown"
+        if status in ("SUCCESS", "COMPLETED", "DONE"):
+            mapped_status = "success"
+        elif status in ("FAILED", "ERROR"):
+            mapped_status = "failed"
+        else:
+            mapped_status = status.lower()
+
+        return mapped_status, video_url, data
+
     def generate_video(self, prompt, ratio, size, duration, seed,
                        info="",
                        enhance_prompt="true", enable_HD="false",
@@ -520,7 +620,7 @@ class RelayVideoGenerator:
             platform = (parsed.get("platform") or "Grok").strip()
             model = parsed.get("model", "")
             api_format = parsed.get("api_format", "v1/video")
-            if api_format not in {"v1/video", "v1/videos", "v2/videos"}:
+            if api_format not in {"v1/video", "v1/videos", "v2/videos", "runninghub-/openapi/v2"}:
                 self._err("Unsupported video api_format: " + api_format)
             print("[RelayAPI] " + platform + " | " + api_format + " | " + base_url + " | " + model)
             images = [img for img in [image1, image2, image3, image4, image5, image6, image7] if img is not None]
@@ -528,7 +628,13 @@ class RelayVideoGenerator:
             pbar = comfy.utils.ProgressBar(100)
             pbar.update_absolute(10)
 
-            if platform == "Veo":
+            if api_format == "runninghub-/openapi/v2":
+                task_id, request_payload = self._rh_video_create(
+                    base_url, api_key, model, prompt, ratio, size, duration,
+                    platform, images, pbar,
+                )
+                query_fn = lambda bu, ak, tid: self._rh_video_query(bu, ak, tid)
+            elif platform == "Veo":
                 task_id, request_payload = self._veo_create(
                     base_url, api_key, model, prompt, ratio, size, duration,
                     enhance_prompt, enable_HD, images, pbar,

@@ -93,10 +93,9 @@ class RelayAPISettings:
         else:
             base_url = api_base
 
-        # api_format 由用户手动选择，不再根据 base_url 自动覆盖
-        if platform == "gpt-image2":
+        if platform == "gpt-image2" and not api_format.startswith("runninghub"):
             api_format = "v1/images"
-        elif platform == "OpenaiText":
+        elif platform == "OpenaiText" and not api_format.startswith("runninghub"):
             api_format = "v1/chat/completions"
 
         plain_apikey = apikey.strip()
